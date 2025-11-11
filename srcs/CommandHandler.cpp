@@ -88,7 +88,8 @@ CommandHandler::CommandHandler(IrcServer& server)
 	m_cmdMap["MODE"]    = &CommandHandler::handleMode;
 	m_cmdMap["KICK"]    = &CommandHandler::handleKick;
 	m_cmdMap["INVITE"]  = &CommandHandler::handleInvite;
-	// m_cmdMap["WHO"]     = &CommandHandler::handleWho;
+	m_cmdMap["WHO"]     = &CommandHandler::handleWho;
+	m_cmdMap["WHOIS"]   = &CommandHandler::handleWhois;
 	m_cmdMap["NAMES"]   = &CommandHandler::handleNames;
 }
 
@@ -98,7 +99,7 @@ CommandHandler::~CommandHandler() {}
 
 void CommandHandler::printMessageDebug(const Message& msg, const std::string& rawLine, const Client& client)
 {
-	std::cout << "----- Parsed IRC Message (fd " << client.getFd() << ") -----" << std::endl; 
+	std::cout << "===== Parsed IRC Message (fd " << client.getFd() << ") =====" << std::endl; 
 	std::cout << "Prefix   : ";
 	if (msg.prefix.empty()) {
 		std::cout << "(none)";
@@ -130,5 +131,5 @@ void CommandHandler::printMessageDebug(const Message& msg, const std::string& ra
 	std::cout << std::endl;
 
 	std::cout << "Raw line : " << rawLine << std::endl;
-	std::cout << "-------------------------------------------------------------" << std::endl;
+	std::cout << "==================================================" << std::endl;
 }

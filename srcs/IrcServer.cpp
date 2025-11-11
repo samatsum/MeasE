@@ -55,29 +55,39 @@ void IrcServer::setUpSocket() {
 	if (status != 0)
 		throw std::runtime_error(std::string("getaddrinfo failed: ") + gai_strerror(status));//gai_strerrorで、失敗原因を文字列で取得
 
-	for (p = res; p != NULL; p = p->ai_next) {
-		m_listenFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-		if (m_listenFd < 0)
-			continue; // 次候補を試す
+	struct addrinfo *boundAddr = NULL;
+	for (int pass = 0; pass < 2 && boundAddr == NULL; ++pass) {
+		for (p = res; p != NULL; p = p->ai_next) {
+			if (pass == 0 && p->ai_family != AF_INET6)
+				continue;// 1周目はIPv6を優先
+			if (pass == 1 && p->ai_family == AF_INET6)
+				continue;// 2周目ではIPv4やその他のみを試す
 
-		// IPv6の「IPv4マッピング無効」を有効に設定。リナックスだとデフォルトで無効らし。
-		if (p->ai_family == AF_INET6) {
-			setsockopt(m_listenFd, IPPROTO_IPV6, IPV6_V6ONLY, &optionOff, sizeof(optionOff));
-		}
+			m_listenFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+			if (m_listenFd < 0)
+				continue; // 次候補を試す
 
-		// 再起動直後でもすぐにバインドできるようにする
-		if (setsockopt(m_listenFd, SOL_SOCKET, SO_REUSEADDR, &optionOn, sizeof(optionOn)) < 0) {
+			// IPv6の「IPv4マッピング無効」を有効に設定。リナックスだとデフォルトで無効らし。
+			if (p->ai_family == AF_INET6) {
+				setsockopt(m_listenFd, IPPROTO_IPV6, IPV6_V6ONLY, &optionOff, sizeof(optionOff));
+			}
+
+			// 再起動直後でもすぐにバインドできるようにする
+			if (setsockopt(m_listenFd, SOL_SOCKET, SO_REUSEADDR, &optionOn, sizeof(optionOn)) < 0) {
+				close(m_listenFd);
+				continue;
+			}
+
+			if (bind(m_listenFd, p->ai_addr, p->ai_addrlen) == 0) {
+				boundAddr = p;
+				break; // バインド成功が目的
+			}
 			close(m_listenFd);
-			continue;
 		}
-
-		if (bind(m_listenFd, p->ai_addr, p->ai_addrlen) == 0)
-			break; // バインド成功が目的
-		close(m_listenFd);
 	}
 	freeaddrinfo(res);//アドレス情報リストはマロックしてるっぽい
 
-	if (p == NULL)
+	if (boundAddr == NULL)
 		throw std::runtime_error("Bind failed for both IPv4 and IPv6");
 
 	if (fcntl(m_listenFd, F_SETFL, O_NONBLOCK) < 0)

@@ -62,7 +62,8 @@ private:
 
 	void	tryRegister(Client& client);
 
-	//void	handleWho(const Message& msg, Client& client);
+	void	handleWho(const Message& msg, Client& client);
+	void	handleWhois(const Message& msg, Client& client);
 	void	handleNames(const Message& msg, Client& client);
 
 	// ====== チャンネル系 ======

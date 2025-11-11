@@ -18,6 +18,9 @@ NICK（1459）
 
 ニックネームをチャンネル内で変更したら面倒そう、
 インバイトリスト、オペーレータリストの2つ帰る必要がありそう。
+
+//ニック
+
 */
 
 
@@ -39,7 +42,16 @@ void CommandHandler::handleNick(const Message& msg, Client& client)
 
 	if (m_server.isNickInUse(newNick))
 	{
-		sendMsg(client.getFd(), "433", client.getNickName(), newNick + " :Nickname is already in use");
+		// irssi互換のレスポンス形式（RFC 1459）: 433 <target> <nick> :Nickname is already in use
+		std::vector<std::string> params;
+		std::string currentNick;
+		if (client.getNickName().empty())
+			currentNick = "*";
+		else
+			currentNick = client.getNickName();
+		params.push_back(currentNick);
+		params.push_back(newNick);
+		sendMsg(client.getFd(), "", "433", params, "Nickname is already in use");
 		return;
 	}
 

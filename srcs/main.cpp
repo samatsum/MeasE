@@ -76,6 +76,10 @@ static bool checkArgs(int argc, char **argv, int &port, std::string &passWord)
 	return (true);
 }
 
+// この関数は「シグナルセーフ」な設計になっている。
+// シグナルハンドラ内では、std::cout のような複雑な関数は（リエントラントでないため）呼び出すべきではないそうだ。
+// このコードは、より安全な write システムコールを直接使ってメッセージを出力しているGood。
+// グローバル変数 g_signalCaught の操作も volatile sig_atomic_t 型で行っており、アトミック（不可分）な操作が保証されている。
 static void sigHandler(int signo)
 {
     g_signalCaught = signo;
@@ -83,6 +87,9 @@ static void sigHandler(int signo)
 	write(STDOUT_FILENO, msg, sizeof(msg) - 1);
 }
 
+// SA_RESTART フラグは、poll や accept のようなシステムコールがシグナルによって中断された場合、自動的に再開させるためのフラグ。
+// しかし、IrcServer.cppのrun関数では、poll が -1 を返し errno == EINTR（シグナル割り込み）だった場合に continue する処理が別途入っている。
+// SA_RESTART を使うか、EINTR を手動でチェックするかは設計次第だが、両方あっても特に害は無い。
 static void SetUpSignalHandlers(struct sigaction &sa)
 {
 

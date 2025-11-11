@@ -26,8 +26,9 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(CMD_DIR)/Quit.cpp \
 	   $(CMD_DIR)/Topic.cpp \
 	   $(CMD_DIR)/User.cpp \
-	   $(CMD_DIR)/Utils.cpp
-#	   $(CMD_DIR)/Who.cpp \
+	   $(CMD_DIR)/Utils.cpp \
+	   $(CMD_DIR)/Who.cpp \
+	   $(CMD_DIR)/Whois.cpp
 
 OBJDIR = obj
 OBJ = $(SRCS:%.cpp=$(OBJDIR)/%.o)
