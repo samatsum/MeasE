@@ -20,12 +20,18 @@ struct ChannelModes {
 
 class Channel {
 private:
+	//基本情報
 	std::string				m_name;
+	ChannelModes			m_channelModes;
+	//メンバ情報
 	std::map<int, Client*>	m_memberViews; // fdをキーにメンバー管理(メンバーの削除はサーバー経由で行う、ここは所有しない意図が命名にある)
 	std::set<std::string>	m_invitedNicks;//inviteOnlyがチャンネル設定時に入れる人を保存　JOINの時に削除する以外やることない？
 	std::set<int>			m_operators; // チャンネルオペレーターのfdを管理,先頭参加者をオペーレーターに、モードに持たせたほうがいい？
+	//トピック管理
 	std::string				m_topic;
-	ChannelModes			m_channelModes;
+	std::string				m_topicSetBy;
+	time_t					m_topicSetTime;
+	
 
 public:
 	explicit Channel(const std::string& name);
@@ -42,8 +48,10 @@ public:
 	void				broadcast(const std::string& message, int excludeFd = -1);
 	void				broadcastAll(const std::string& message);
 
-	void				setTopic(const std::string& topic);
+	void				setTopic(const std::string& topic, const std::string& setBy);
 	const std::string&	getTopic() const;
+	const std::string&	getTopicSetBy() const;
+	const time_t&		getTopicSetTime() const;
 
 	void				setMode(const ChannelModes& modes);
 	const ChannelModes&	getModes() const;
@@ -52,6 +60,7 @@ public:
 	void				addOperator(int fd);
 	void				removeOperator(int fd);
 
+	//招待関係
 	void				addInvitedNick(const std::string& nick);
 	void				removeInvitedNick(const std::string& nick);
 	bool				isInvited(const std::string& nick) const;

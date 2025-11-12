@@ -8,6 +8,9 @@
 /*
 324の返答が、ちとあとでチェック
 
+・ユーザーモードのフラグ変更
+たとえば、チャンネル
+
 */
 
 void CommandHandler::handleMode(const Message& msg, Client& client) {
@@ -23,13 +26,14 @@ void CommandHandler::handleMode(const Message& msg, Client& client) {
 	handleChannelMode(msg, client);
 }
 
-//これは、別に対応してないから、ちと返答は考える。一応、空文字を返す。
+//ユーザーモードは非対応
 void CommandHandler::handleUserMode(const Message& msg, Client& client) {
 	(void)msg;
-	sendMsg(client.getFd(), "221", client.getNickName(), "");
+	sendMsg(client.getFd(), "501", client.getNickName(), ":User modes are not supported on this server");
 }
 
 void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
+
 	const std::string& target = msg.params[0];
 	Channel* channel = m_server.findChannel(target);
 

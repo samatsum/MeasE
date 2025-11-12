@@ -27,10 +27,11 @@ private:
 		std::string command;
 		std::vector<std::string> params;
 		std::string trailing;
+		bool		trailingFlag;//:が存在したか。：だけの空呼び出しに対応。
 	
 		bool isValid;
 		std::string errorDetail;
-		Message() : isValid(false) {}
+		Message() : trailingFlag(false), isValid(false) {}
 	};
 
 	typedef void (CommandHandler::*CommandFunc)(const struct Message& msg, Client& client);
@@ -45,6 +46,10 @@ private:
 	void	sendMsg(int fd, const std::string& code,
 	                 const std::string& target,
 	                 const std::string& text);
+	void	sendNumeric(int fd,
+		const std::string& code,
+		const std::vector<std::string>& params,
+		const std::string& trailing);
 
 	// ====== 通信系 ======
 	void	handleCAP(const Message& msg, Client& client);

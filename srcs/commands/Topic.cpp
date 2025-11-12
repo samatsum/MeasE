@@ -11,9 +11,30 @@
 // const char* ERR_NEEDMOREPARAMS = "461";
 // const char* ERR_NOSUCHCHANNEL = "403";
 // const char* ERR_NOTONCHANNEL = "442";
+// const char* ERR_NOCHANMODES = "477";モードをサポートしないチャンネルとは？
 // const char* ERR_CHANOPRIVSNEEDED = "482";
 // const char* RPL_NOTOPIC = "331";
 // const char* RPL_TOPIC = "332";
+
+/*
+TOPIC channel [:topic]
+もし、トピックが省略されたら、現在のトピックを返す。
+もし、トピックが指定されたら、そのチャンネルのトピックを指定する（許可次第）
+トピックが空文字列（:）だけなら、トピックを削除する（2814）
+
+(+t)　オプションは、トピック変更をオペレーターのみに限定する。（これは以前samatsum氏に対して間違って説明してましたね。）
+エラーは、ユーザーのチャンネル不参加、パラ不足、モードをサポートしてないチャンネル
+
+2814では、トレーリングを空文字にすることで、トピックの削除をできる。（1459では削除の問題はない）
+ただしirssiでは
+/topic #gen :hogeでは、topicが、:hogeにされる。
+/topic #gen hoge だと、irssi側で、topic #gen :hogeに変換さされる。
+なので、空文字で送ると、/topic #genになるので、削除ができない。(スペースを入れるとスペースが入ってるかも)
+優先順位が低いのと、ncでは、この仕様が実現できてるので、今回はこのままにする。
+
+同じトピックを再設定しようとしたときに、ブロードキャストし直すのもめんどいから
+もしトピックとトレーリングが同じならreturnを入れてもいいかも。
+*/
 
 void CommandHandler::handleTopic(const Message& msg, Client& client) {
 
@@ -37,15 +58,24 @@ void CommandHandler::handleTopic(const Message& msg, Client& client) {
 		return;
 	}
 
-	//トピックがちゃんと引数としてあるか。
-	//TOPIC　#channel :new topic なので、トレーリングがないとチャンネル名だけになる、パラムスが複数なら2つ目以降は無視。
+/*
+
+
+
+*/
+
+	//トピック何？への回答
 	const ChannelModes& modes = channel->getModes();
-	if (msg.params.size() == 1 && msg.trailing.empty()) {
+	if (msg.params.size() == 1 && msg.trailingFlag == false) {
 		if (channel->getTopic().empty()) {
 			sendMsg(client.getFd(), "331", client.getNickName(), channelName + " :No topic is set");
 		} else {
 			sendMsg(client.getFd(), "332", client.getNickName(), channelName + " :" + channel->getTopic());
 		}
+
+		std::ostringstream whoTimeMsg;
+		whoTimeMsg << channelName << " " << channel->getTopicSetBy() << " " << channel->getTopicSetTime();
+		sendMsg(client.getFd(), "333", client.getNickName(), whoTimeMsg.str());
 		return;
 	}
 
@@ -54,15 +84,17 @@ void CommandHandler::handleTopic(const Message& msg, Client& client) {
 		return;
 	}
 
-	//すでに同じトピックが設定されてるときは？
-	std::string newTopic = msg.trailing;
-
-	channel->setTopic(newTopic);
-
+	std::string newTopic;
+	if (msg.trailing.empty()) {
+		newTopic = "";
+	} else {
+		newTopic = msg.trailing;
+	}
+	channel->setTopic(newTopic, client.getNickName());
 	std::ostringstream topicMsg;
 	topicMsg << ":" << client.makePrefix()
-	         << " TOPIC " << channelName
-	         << " :" << newTopic << "\r\n";
-
+	         << " TOPIC " << channelName << " :" << newTopic << "\r\n";
 	channel->broadcast(topicMsg.str());
+	return;
+
 }

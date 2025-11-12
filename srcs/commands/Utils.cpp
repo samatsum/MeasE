@@ -70,7 +70,7 @@ CommandHandler::Message CommandHandler::parse(const std::string& rawLine) {
 	while (iss >> part) {
 
 		if (part[0] == ':') {
-	
+			msg.trailingFlag = true;
 			msg.trailing = part.substr(1);
 			std::string rest;
 			std::getline(iss, rest);
@@ -115,6 +115,24 @@ void CommandHandler::sendMsg(int fd, const std::string& code,
 	if (!text.empty())
 		params.push_back(target);
 	sendMsg(fd, "", code, params, text);
+}
+
+void CommandHandler::sendNumeric(int fd,
+	const std::string& code,
+	const std::vector<std::string>& params,
+	const std::string& trailing)
+{
+	std::ostringstream oss;
+	oss << ":" << m_serverName << " " << code;
+
+	for (size_t i = 0; i < params.size(); ++i)
+		oss << " " << params[i];
+
+	if (!trailing.empty())
+		oss << " :" << trailing;
+
+	std::string out = oss.str() + "\r\n";
+	send(fd, out.c_str(), out.size(), 0);
 }
 
 void CommandHandler::tryRegister(Client& client)

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <unistd.h>
+#include <ctime>
 
 /*
 【概要】
@@ -125,8 +126,18 @@ size_t Channel::getMemberCount() const {
 
 /*== setter ============================================================*/
 
-void Channel::setTopic(const std::string& topic) {
+void Channel::setTopic(const std::string& topic, const std::string& setBy) {
 	m_topic = topic;
+	m_topicSetBy = setBy;
+	m_topicSetTime = std::time(NULL);
+}
+
+const std::string& Channel::getTopicSetBy() const {
+	return m_topicSetBy;
+}
+
+const time_t& Channel::getTopicSetTime() const {
+	return m_topicSetTime;
 }
 
 void Channel::setMode(const ChannelModes& modes) {

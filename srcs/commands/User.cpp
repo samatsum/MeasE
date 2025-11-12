@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 /*
+1459準拠
 
 */
 

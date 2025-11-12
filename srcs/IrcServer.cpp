@@ -21,10 +21,8 @@
 
 【予定】
 EINTRは、シグナル割り込みだが、ポール、アクセプト、レシーブで発生を考慮（ポール対応済み）
-チャンネル実装時に、チャンネルから外す処理が必要。
 
-POLLの待機は、IOのブロッキングと少し違う話かも。
-（待機は0はCPU使いすぎ？）
+POLLの待機は、−1にするかも。
 
 sendが一回で送れなかったとき→sefesendを呼び出すことを検討。
 
@@ -102,11 +100,15 @@ void IrcServer::setUpSocket() {
 	m_pollFds.push_back(pollFd);
 }
 
-//
+//m_pollFds[i - 1].revents とは？ poll 関数が返した「イベントの状態」が格納されている数値です。
+//ここには POLLIN（データあり）、POLLHUP（切断）、POLLERR（エラー）など、
+//発生したイベントの種類が「ビットフラグ」としてまとめて格納されています
+//https://manpages.ubuntu.com/manpages/noble/ja/man2/poll.2.html
 void	IrcServer::run() {
 
 	while (g_signalCaught == 0)
 	{
+		//タイムアウトを-1にすると、監視対象のソケット（クライアント接続や新規接続待機）のいずれかでイベントが発生するまで、プロセスをスリープ。
 		int numFds = poll(&m_pollFds[0], m_pollFds.size(), 0);
 		if (numFds < 0) {
 			if (errno == EINTR)
@@ -114,17 +116,20 @@ void	IrcServer::run() {
 			throw std::runtime_error("Poll failed");
 		}
 
+		//m_pollFds には、(a) 新規接続を待つ m_listenFd と、(b) 接続済みクライアントのソケット、の両方が含まれている。
 		for (std::size_t i = m_pollFds.size(); i > 0; --i)
 		{
-			//複数のイベントが発生することもあるので、ビット演算でPOLLINが含まれるかを見てる。
+			//複数のイベントが発生することもあるので、ビット演算(高速！)でPOLLINが含まれるかを見てる。
+			//POLLINがTrueになるのは、データが到着した場合とソケットが「正常に」切断された場合 (EOF)
 			if (m_pollFds[i - 1].revents & POLLIN) {
 
 				if (m_pollFds[i - 1].fd == m_listenFd)
-					acceptNewClient();//リスニングソケットにイベントが起きたら
+					acceptNewClient();//リスニングソケットにイベントが起きたら（新規接続）
 				else
-					receiveFromClient(m_pollFds[i - 1].fd);
+					receiveFromClient(m_pollFds[i - 1].fd);//接続済みクライアントにイベントがおいたら
 
 			}
+			//POLLHUPがTrueになるのは、ソケットが(異常)切断された場合
 			if (m_pollFds[i - 1].revents & POLLHUP)
 				closeClient(i - 1);//接続が切れたとき
 		}
@@ -208,19 +213,15 @@ void IrcServer::receiveFromClient(int fd) {
 
 	client.appendBuffer(std::string(buffer, bytes));
 
-	//少なくとも蓄積を含めて512を超えるようなものは拒否する
-	//CRLFも含めて512バイトなので、厳密には512バイトを超えたら拒否する。
-	if (client.getBuffer().length() >= 512) {
-
-		closeClientByFd(fd);
-		std::cerr << "Client (fd=" << fd << ") exceeded buffer limit. Connection closed." << std::endl;
-		return;
-	}
-
 	std::string containCmd;
 	//１つのバッファーで複数のコマンドが来たときようにワイルで回している。
 	while (client.extractNextCommand(containCmd))
 	{
+		if (containCmd.length() > 512) {
+			closeClientByFd(fd);
+			std::cerr << "Client (fd=" << fd << ") sent command exceeding 512 bytes. Connection closed." << std::endl;
+			return;
+		}
 		m_commandHandler.parseCommand(containCmd, client);
 	}
 }
@@ -244,7 +245,7 @@ void	IrcServer::closeClientByFd(int fd) {
 	for (std::size_t i = m_pollFds.size(); i > 0; --i) {
 
 		if (m_pollFds[i - 1].fd == fd) {
-			m_pollFds.erase(m_pollFds.begin() + (i - 1));
+			m_pollFds.erase(m_pollFds.begin() + (i - 1));//m_pollFds は std::vector。どんどんベクタのサイズが縮小していくー！
 			break;
 		}
 	}

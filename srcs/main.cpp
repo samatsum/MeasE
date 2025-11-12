@@ -77,14 +77,14 @@ static bool checkArgs(int argc, char **argv, int &port, std::string &passWord)
 }
 
 // この関数は「シグナルセーフ」な設計になっている。
-// シグナルハンドラ内では、std::cout のような複雑な関数は（リエントラントでないため）呼び出すべきではないそうだ。
+// シグナルハンドラ内では、std::cout のような複雑な関数は（リエントラント？でないため）呼び出すべきではないそうだ。
 // このコードは、より安全な write システムコールを直接使ってメッセージを出力しているGood。
 // グローバル変数 g_signalCaught の操作も volatile sig_atomic_t 型で行っており、アトミック（不可分）な操作が保証されている。
 static void sigHandler(int signo)
 {
     g_signalCaught = signo;
-	const char msg[] = "\nSignal detected, Starting server shutdown...\n";
-	write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+	// const char msg[] = "\nSignal detected, Starting server shutdown...\n";
+	// write(STDOUT_FILENO, msg, sizeof(msg) - 1);
 }
 
 // SA_RESTART フラグは、poll や accept のようなシステムコールがシグナルによって中断された場合、自動的に再開させるためのフラグ。
