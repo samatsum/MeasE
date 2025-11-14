@@ -44,8 +44,12 @@ void CommandHandler::handlePrivmsg(const Message& msg, Client& client)
 
 	const std::string& target = msg.params[0];
 	const std::string& message = msg.trailing;
+	if (!message.empty() && message[0] == '!')
+	{
+		handleBot(msg, client);
+		return;
+	}
 
-	//チャンネル宛て
 	if (!target.empty() && target[0] == '#')
 	{
 		Channel* channel = m_server.findChannel(target);

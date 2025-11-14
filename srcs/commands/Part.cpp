@@ -45,6 +45,8 @@ void CommandHandler::handlePart(const Message& msg, Client& client)
 	channel->broadcast(partMsg);
 	sendMsg(client.getFd(), partMsg);
 
+	client.resetBotCards();
+
 	// --- チャンネルから削除 ---
 	channel->removeOperator(client.getFd());//再度入った時を考慮
 	client.leaveChannel(channelName);

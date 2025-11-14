@@ -4,6 +4,8 @@
 #include <string>
 #include <netinet/in.h>
 #include <set>
+#include <vector>
+
 
 class Client {
 
@@ -17,8 +19,7 @@ private:
 	bool					m_isAuthenticated;//pass認証用
 	bool					m_isRegistered;//情報の登録完了用
 	std::set<std::string>	m_joinedChannels;
-	//参加しているチャンネル、権限設定、などもここで持つべきかも。
-	// bool					m_isInvisible;//インビジブルモード
+	std::vector<std::string> m_botCards;//ブラックジャック用の引いたカード保存用
 
 public:
 	//Client(int fd);
@@ -48,10 +49,14 @@ public:
 	void				setRegistered(bool state);//register用
 
 	std::string makePrefix() const;
-	void joinChannel(const std::string& name);
-	void leaveChannel(const std::string& name);
-	bool isInChannel(const std::string& name) const;
+	void		joinChannel(const std::string& name);
+	void		leaveChannel(const std::string& name);
+	bool		isInChannel(const std::string& name) const;
 
+	void		addBotCard(const std::string& card);
+	void		resetBotCards();
+	int			calcBotBJTotal() const;
+	size_t		getBotCardCount() const;
 };
 
 #endif

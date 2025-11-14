@@ -22,6 +22,8 @@ l - user limit
 
 kiはおｋぽい。
 
+フラグとか考えないで、
+bが、あったら、最初に処理して、paramsから抜く、これで行く。
 
 */
 
@@ -72,19 +74,50 @@ void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 		return;
 	}
 
-	// --- 権限チェック ---
-	if (!(msg.params.size() >= 2 && msg.params[1] == "b")) {
-		if (!channel->isOperator(client.getFd())) {
-			sendError(client, "482", target, "You're not channel operator");
+	if (msg.params[1].find('b') != std::string::npos) {
+		handleBan(client, *channel, target);
+
+		//+b, -b, bの場合はここで終わらせる
+		bool onlyB = true;
+		for (size_t i = 0; i < msg.params[1].size(); ++i) {
+			char c = msg.params[1][i];
+			if (c != '+' && c != '-' && c != 'b') {
+				onlyB = false;
+				break;
+			}
+		}
+		if (onlyB) {
 			return;
 		}
 	}
+
+	std::string cleaned;
+	for (size_t i = 0; i < msg.params[1].size(); ++i) {
+		if (msg.params[1][i] != 'b') {
+			cleaned += msg.params[1][i];
+		}
+	}
+	
+	Message newMsg = msg;
+	newMsg.params[1] = cleaned;
+
+	if (!channel->isOperator(client.getFd())) {
+		sendError(client, "482", target, "You're not channel operator");
+		return;
+	}
+	// --- 権限チェック ---　これは複数のコマンドが入らない。
+	// if (!(msg.params.size() >= 2)) {
+	// 	if (!channel->isOperator(client.getFd())) {
+	// 		sendError(client, "482", target, "You're not channel operator");
+	// 		return;
+	// 	}
+	// }
 	// if (!channel->isOperator(client.getFd())) {
 	// 	sendError(client, "482", target, "You're not channel operator");
 	// 	return;
 	// }
 
-	applyChannelMode(msg, client, *channel);
+	applyChannelMode(newMsg, client, *channel);
 }
 
 // --- チャンネルモード一覧返信 (324) ---
@@ -135,9 +168,6 @@ void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channe
 				break;
 			case 'l':
 				handleModeLimit(msg, client, channel, modes, adding, paramIndex);
-				break;
-			case 'b':
-				handleBan(client, channel, channel.getName());
 				break;
 			default:
 				sendError(client, "472", std::string(1, m), "is unknown mode character");

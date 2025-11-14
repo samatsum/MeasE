@@ -104,7 +104,11 @@ private:
 
 	// ====== その他 ======
 	
-
+	void	handleBot(const Message& msg, Client& client);
+	void	handleHello(const Message& msg, Client& client);
+	void	handleOmikuji(const Message& msg, Client& client);
+	void	handleChinchiro(const Message& msg, Client& client);
+	void	handleBlackjack(const Message& msg, Client& client);
 
 	// ====== ユーティリティ系 ======
 	std::string	makeUppercase(const std::string& argStr);

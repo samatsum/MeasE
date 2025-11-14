@@ -97,17 +97,20 @@ void CommandHandler::handleJoin(const Message& msg, Client& client)
 		params.push_back(channelName);
 
 		std::string prefix = client.makePrefix(); // nick!user@host
-		std::string out = buildMessage(prefix, "JOIN", params, "");
+		// std::string out = buildMessage(prefix, "JOIN", params, "");
+		std::string out = prefix + " JOIN " + channelName + "\r\n";
 		channel.broadcast(out);
 		sendMsg(client.getFd(), out);
 	}
 
-	if (!channel.getTopic().empty()) {
+	{
 		std::vector<std::string> p;
 		p.push_back(client.getNickName());
 		p.push_back(channelName);
-
-		sendMsg(client.getFd(), "", "332", p, channel.getTopic());
+		if (channel.getTopic().empty())
+			sendMsg(client.getFd(), "", "331", p, "No topic is set");
+		else
+			sendMsg(client.getFd(), "", "332", p, channel.getTopic());
 	}
 
 	// RPL_NAMREPLY

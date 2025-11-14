@@ -9,6 +9,7 @@
 /*
 気が向いたら処理する。
 
+抜けたやつの、カードの情報は消さんでも保存されてへんよな・・・？
 */
 
 void CommandHandler::handleQuit(const Message& msg, Client& client)

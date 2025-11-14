@@ -64,7 +64,7 @@ void CommandHandler::handleKick(const Message& msg, Client& client)
 	std::string out = buildMessage(prefix, "KICK", params, reason);
 
 	ch->broadcast(out);
-
+	client.resetBotCards();
 	ch->removeOperator(target->getFd());
 	ch->removeMember(target->getFd());
 	target->leaveChannel(channelName);

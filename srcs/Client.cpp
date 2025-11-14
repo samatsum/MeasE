@@ -1,6 +1,6 @@
 #include "../includes/Client.hpp"
 #include <unistd.h>
-
+#include <cstdlib>
 /*
 【概要】
 クライアントごとの情報を管理するクラス。
@@ -157,6 +157,57 @@ bool Client::isInChannel(const std::string& name) const {
 
 std::string Client::makePrefix() const {
 	return m_nickName + "!" + m_userName + "@" + m_host; // m_host を持っている前提
+}
+
+/*=========================================================*/
+
+void Client::addBotCard(const std::string& card) {
+
+	m_botCards.push_back(card);
+}
+
+void Client::resetBotCards() {
+
+	m_botCards.clear();
+}
+
+int Client::calcBotBJTotal() const
+{
+    int total = 0;
+    int aceCount = 0;
+
+    for (size_t i = 0; i < m_botCards.size(); i++)
+    {
+        const std::string& card = m_botCards[i];
+
+        if (card == "J" || card == "Q" || card == "K")
+        {
+            total += 10;
+        }
+        else if (card == "0") // Ace
+        {
+            total += 1;
+            aceCount++;
+        }
+        else
+        {
+            total += std::atoi(card.c_str());
+        }
+    }
+
+	//aは、1か11で扱い、有利な方を適用
+    for (int i = 0; i < aceCount; i++)
+    {
+        if (total + 10 <= 21)
+            total += 10;
+    }
+
+    return total;
+}
+
+size_t Client::getBotCardCount() const {
+
+	return m_botCards.size();
 }
 
 /*=== コンストラクタ、デストラクタ ============================*/

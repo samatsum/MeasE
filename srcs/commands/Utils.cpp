@@ -9,20 +9,11 @@
 /*
 【概要】
 コマンドハンドラークラスのうち、プロトコルに従った、解析と送信を行うメソッド群。
-
-sendErrorやsendReplyは内実同じだが、呼び出し時に意図を伝えるために分けている。
- 
-君たち、コマンドハンドラー直下でもよくない？
-
-
 登録完了ように、001, 002, 003, 004を返す。RFC2812参照。
 001　RPL_WELCOME　クライアントに対する最初の挨拶メッセージ
 002　RPL_YOURHOST　サーバのホスト名とバージョン情報
 003　RPL_CREATED　サーバが作成された日時情報
 004　RPL_MYINFO　サーバ情報（モードや対応機能など）
-
-mode +b　はとりま未対応
-
 */
 
 CommandHandler::Message CommandHandler::parse(const std::string& rawLine) {
