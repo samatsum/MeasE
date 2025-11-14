@@ -13,19 +13,21 @@ Error Reply
 void CommandHandler::handlePing(const Message& msg, Client& client)
 {
 	std::string token;
+
 	if (!msg.trailing.empty()) {
 		token = msg.trailing;
 	} else if (!msg.params.empty()) {
 		token = msg.params[0];
 	} else {
-		sendMsg(client.getFd(), "409", client.getNickName(), "No origin specified");
-		std::cout << "[fd " << client.getFd() << "] PING missing trailing" << std::endl;
+		sendError(client, "409", "PING", "No origin specified");
+		std::cout << "[fd " << client.getFd() << "] PING missing token" << std::endl;
 		return;
 	}
 
-	std::string out = "PONG :" + token + "\r\n";
-	if (send(client.getFd(), out.c_str(), out.size(), 0) == -1) {
-		std::cerr << "Send PONG failed: " << std::strerror(errno) << std::endl;
-	}
+	std::vector<std::string> params;
+	params.push_back(m_serverName); // RFC2812: PONG <servername> :<token>
+	std::string out = buildMessage("", "PONG", params, token);
+	sendMsg(client.getFd(), out);
+
 	std::cout << "[fd " << client.getFd() << "] PONG sent: " << token << std::endl;
 }

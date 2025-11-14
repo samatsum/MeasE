@@ -15,7 +15,8 @@
 
 ```
 サーバーが接続可能なクライアント上限の対応
-005 RPL_BOUNCE　→実装しないかなあ・・・。
+005 RPL_BOUNCE
+サーバーに、クライアント数のゲッターを設置することになる。
 
 
 
@@ -50,10 +51,10 @@ LIST
 
 void CommandHandler::parseCommand(const std::string& line, Client& client)
 {
-	//解析ミスはエラーコマンドとして場合によってはニューメリックが必要かも
 	Message msg = parse(line);
 	if (!msg.isValid) {
 
+		sendError(client, "421", client.getNickName(), "Invalid command: " + msg.errorDetail);
 		std::cerr << "[fd " << client.getFd() << "] Invalid IRC line: " << msg.errorDetail << std::endl;
 		return;
 	}
@@ -67,7 +68,7 @@ void CommandHandler::parseCommand(const std::string& line, Client& client)
 		(this->*it->second)(msg, client);
 	} else {
 
-		sendMsg(client.getFd(), "421", client.getNickName(), cmd + " :Unknown command");
+		sendError(client, "421", client.getNickName(), cmd + " :Unknown command");
 		std::cout << "[fd " << client.getFd() << "] Unknown command: " << cmd << std::endl;
 	}
 }

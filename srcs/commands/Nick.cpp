@@ -24,25 +24,21 @@ NICK（1459）
 */
 
 
+
 void CommandHandler::handleNick(const Message& msg, Client& client)
 {
-	if (msg.params.empty())
-	{
-		sendMsg(client.getFd(), "431", client.getNickName(), ":No nickname given");
+	if (msg.params.empty()) {
+		sendError(client, "431", "NICK", "No nickname given");
 		return;
 	}
 
 	std::string newNick = msg.params[0];
-
-	if (!isValidNick(newNick))
-	{
-		sendMsg(client.getFd(), "432", client.getNickName(), newNick + " :Erroneous nickname");
+	if (!isValidNick(newNick)) {
+		sendError(client, "432", newNick, "Erroneous nickname");
 		return;
 	}
 
-	if (m_server.isNickInUse(newNick))
-	{
-		// irssi互換のレスポンス形式（RFC 1459）: 433 <target> <nick> :Nickname is already in use
+	if (m_server.isNickInUse(newNick)) {
 		std::vector<std::string> params;
 		std::string currentNick;
 		if (client.getNickName().empty())
@@ -56,13 +52,9 @@ void CommandHandler::handleNick(const Message& msg, Client& client)
 	}
 
 	if (!client.isRegistered())
-	{
 		registerNick(client, newNick);
-	}
 	else
-	{
 		changeNick(client, newNick);
-	}
 }
 
 void CommandHandler::registerNick(Client& client, const std::string& newNick)
@@ -77,12 +69,12 @@ void CommandHandler::changeNick(Client& client, const std::string& newNick)
 	client.setNickName(newNick);
 
 	// :oldNick!user@host NICK :newNick
-	std::ostringstream noticeMsg;
-	noticeMsg << ":" << oldNick << "!" << client.getUserName()
-	          << "@" << client.getHost()
-	          << " NICK :" << newNick << "\r\n";
+	std::vector<std::string> params;
+	std::string prefix = oldNick + "!" + client.getUserName() + "@" + client.getHost();
+	std::string msg = buildMessage(prefix, "NICK", params, newNick);
 
-	m_server.broadcastAll(noticeMsg.str());
+	// 全体通知
+	m_server.broadcastAll(msg);
 
 	std::cout << "[fd " << client.getFd() << "] NICK changed from "
 	          << oldNick << " to " << newNick << std::endl;

@@ -36,65 +36,126 @@ TOPIC channel [:topic]
 もしトピックとトレーリングが同じならreturnを入れてもいいかも。
 */
 
-void CommandHandler::handleTopic(const Message& msg, Client& client) {
-
-	if (!client.isAuthenticated()) {
-		sendMsg(client.getFd(), "451", client.getNickName(), "You have not registered");
+void CommandHandler::handleTopic(const Message& msg, Client& client)
+{
+	if (!requireAuth(client, "TOPIC"))
 		return;
-	}
 	if (msg.params.empty()) {
-		sendMsg(client.getFd(), "461", client.getNickName(), "TOPIC :Not enough parameters");
+		sendError(client, "461", "TOPIC", "Not enough parameters");
 		return;
 	}
 
 	std::string channelName = msg.params[0];
 	Channel* channel = m_server.findChannel(channelName);
 	if (!channel) {
-		sendMsg(client.getFd(), "403", client.getNickName(), channelName + " :No such channel");
+		sendError(client, "403", channelName, "No such channel");
 		return;
 	}
 	if (!channel->hasMember(client.getFd())) {
-		sendMsg(client.getFd(), "442", client.getNickName(), channelName + " :You're not on that channel");
+		sendError(client, "442", channelName, "You're not on that channel");
 		return;
 	}
 
-/*
-
-
-
-*/
-
-	//トピック何？への回答
 	const ChannelModes& modes = channel->getModes();
-	if (msg.params.size() == 1 && msg.trailingFlag == false) {
-		if (channel->getTopic().empty()) {
-			sendMsg(client.getFd(), "331", client.getNickName(), channelName + " :No topic is set");
-		} else {
-			sendMsg(client.getFd(), "332", client.getNickName(), channelName + " :" + channel->getTopic());
-		}
 
-		std::ostringstream whoTimeMsg;
-		whoTimeMsg << channelName << " " << channel->getTopicSetBy() << " " << channel->getTopicSetTime();
-		sendMsg(client.getFd(), "333", client.getNickName(), whoTimeMsg.str());
+	if (msg.params.size() == 1 && msg.trailingFlag == false) {
+		if (channel->getTopic().empty())
+			sendChanReply(client.getFd(), "331", client.getNickName(), channelName, "No topic is set");
+		else
+			sendChanReply(client.getFd(), "332", client.getNickName(), channelName, channel->getTopic());
+
+		std::ostringstream whoTime;
+		whoTime << channelName << " " << channel->getTopicSetBy()
+		        << " " << channel->getTopicSetTime();
+
+		std::vector<std::string> params;
+		params.push_back(client.getNickName());
+		sendMsg(client.getFd(), buildMessage("", "333", params, whoTime.str()));
 		return;
 	}
 
 	if (modes.topicProtected && !channel->isOperator(client.getFd())) {
-		sendMsg(client.getFd(), "482", client.getNickName(), channelName + " :You're not channel operator");
+		sendChanReply(client.getFd(), "482", client.getNickName(), channelName, "You're not channel operator");
 		return;
 	}
 
+	//同じトピックなら何もしない
 	std::string newTopic;
-	if (msg.trailing.empty()) {
+	if (!msg.trailingFlag)
 		newTopic = "";
-	} else {
+	else
 		newTopic = msg.trailing;
-	}
+	if (newTopic == channel->getTopic())
+		return;
+
 	channel->setTopic(newTopic, client.getNickName());
+
+	// --- ブロードキャスト ---
 	std::ostringstream topicMsg;
 	topicMsg << ":" << client.makePrefix()
 	         << " TOPIC " << channelName << " :" << newTopic << "\r\n";
 	channel->broadcast(topicMsg.str());
-	return;
-
 }
+
+// void CommandHandler::handleTopic(const Message& msg, Client& client) {
+
+// 	if (!client.isAuthenticated()) {
+// 		sendMsg(client.getFd(), "451", client.getNickName(), "You have not registered");
+// 		return;
+// 	}
+// 	if (msg.params.empty()) {
+// 		sendMsg(client.getFd(), "461", client.getNickName(), "TOPIC :Not enough parameters");
+// 		return;
+// 	}
+
+// 	std::string channelName = msg.params[0];
+// 	Channel* channel = m_server.findChannel(channelName);
+// 	if (!channel) {
+// 		sendMsg(client.getFd(), "403", client.getNickName(), channelName + " :No such channel");
+// 		return;
+// 	}
+// 	if (!channel->hasMember(client.getFd())) {
+// 		sendMsg(client.getFd(), "442", client.getNickName(), channelName + " :You're not on that channel");
+// 		return;
+// 	}
+
+// /*
+
+
+
+// */
+
+// 	//トピック何？への回答
+// 	const ChannelModes& modes = channel->getModes();
+// 	if (msg.params.size() == 1 && msg.trailingFlag == false) {
+// 		if (channel->getTopic().empty()) {
+// 			sendMsg(client.getFd(), "331", client.getNickName(), channelName + " :No topic is set");
+// 		} else {
+// 			sendMsg(client.getFd(), "332", client.getNickName(), channelName + " :" + channel->getTopic());
+// 		}
+
+// 		std::ostringstream whoTimeMsg;
+// 		whoTimeMsg << channelName << " " << channel->getTopicSetBy() << " " << channel->getTopicSetTime();
+// 		sendMsg(client.getFd(), "333", client.getNickName(), whoTimeMsg.str());
+// 		return;
+// 	}
+
+// 	if (modes.topicProtected && !channel->isOperator(client.getFd())) {
+// 		sendMsg(client.getFd(), "482", client.getNickName(), channelName + " :You're not channel operator");
+// 		return;
+// 	}
+
+// 	std::string newTopic;
+// 	if (msg.trailing.empty()) {
+// 		newTopic = "";
+// 	} else {
+// 		newTopic = msg.trailing;
+// 	}
+// 	channel->setTopic(newTopic, client.getNickName());
+// 	std::ostringstream topicMsg;
+// 	topicMsg << ":" << client.makePrefix()
+// 	         << " TOPIC " << channelName << " :" << newTopic << "\r\n";
+// 	channel->broadcast(topicMsg.str());
+// 	return;
+
+// }

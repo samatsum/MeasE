@@ -7,17 +7,14 @@
 #include <cerrno>
 
 /*
-登録確認はいらないが、
-登録状況に応じた離脱処理が必要（結局登録確認が必要ってやつよ。）
+気が向いたら処理する。
 
 */
 
-// QUITコマンド処理、チャンネルからの退室通知も行う。
-void CommandHandler::handleQuit(const Message& msg, Client& client) {
-	
+void CommandHandler::handleQuit(const Message& msg, Client& client)
+{
 	std::string message;
 
-	// RFCではQUIT <Quit Message>が任意。空ならデフォルトを補う。
 	if (!msg.trailing.empty())
 		message = msg.trailing;
 	else if (!msg.params.empty())
@@ -25,16 +22,17 @@ void CommandHandler::handleQuit(const Message& msg, Client& client) {
 	else
 		message = "Client Quit";
 
-	std::string prefix = client.makePrefix();
-	std::string	quitMsg = ":" + prefix + " QUIT :" + message + "\r\n";
-
-	// ここでRFC的には、他クライアント／チャンネルに通知が必要。
 	if (client.isRegistered()) {
+		std::string prefix = client.makePrefix();
+		std::string quitMsg = buildMessage(prefix, "QUIT", std::vector<std::string>(), message);
+
 		m_server.removeClientFromAllChannels(client.getFd());
 		m_server.broadcastAll(quitMsg);
-		std::cout << "[fd " << client.getFd() << "] is quitting" << std::endl;
+
+		std::cout << "[fd " << client.getFd() << "] QUIT (registered): " << message << std::endl;
+	} else {
+		std::cout << "[fd " << client.getFd() << "] QUIT (unregistered): " << message << std::endl;
 	}
 
 	m_server.requestClientClose(client.getFd());
-	std::cout << "[fd " << client.getFd() << "] QUIT: " << message << std::endl;
 }

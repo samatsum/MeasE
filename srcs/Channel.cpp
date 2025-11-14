@@ -31,6 +31,7 @@ void	Channel::broadcast(const std::string& message, int excludeFd) {
 
 		if (memberFd != excludeFd) {
 			std::string msgWithCRLF = message;
+			std::cout << "[send cb]" << msgWithCRLF << std::endl;
 			if (send(memberFd, msgWithCRLF.c_str(), msgWithCRLF.length(), 0) == -1) {
 				std::cerr << "Failed to send message to fd " << memberFd << std::endl;
 			}
@@ -87,7 +88,8 @@ void Channel::addOperator(int fd) {
 }
 
 void Channel::removeOperator(int fd) {
-	m_operators.erase(fd);
+	if (isOperator(fd))
+		m_operators.erase(fd);
 }
 
 void Channel::addInvitedNick(const std::string& nick) {

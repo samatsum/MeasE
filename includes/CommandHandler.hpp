@@ -39,17 +39,23 @@ private:
 
 
 	Message parse(const std::string& rawLine);
-	void	sendMsg(int fd, const std::string& prefix,
-	                 const std::string& command,
-	                 const std::vector<std::string>& params,
-	                 const std::string& trailing);
-	void	sendMsg(int fd, const std::string& code,
-	                 const std::string& target,
-	                 const std::string& text);
-	void	sendNumeric(int fd,
-		const std::string& code,
+	std::string buildMessage(
+		const std::string& prefix,
+		const std::string& command,
 		const std::vector<std::string>& params,
 		const std::string& trailing);
+	void	sendMsg(int fd, const std::string& prefix,
+						const std::string& command,
+						const std::vector<std::string>& params,
+						const std::string& trailing);
+	void sendMsg(int fd, const std::string& msg);
+	void sendChanReply(int fd, const std::string& code,
+					const std::string& nick, const std::string& chan, const std::string& text);
+	void sendError(Client& client, const std::string& code,
+                               const std::string& context, const std::string& text);
+
+	bool requireAuth(Client& client, const std::string& command);
+	Channel* findValidChannel(const std::string& name, Client& client);
 
 	// ====== 通信系 ======
 	void	handleCAP(const Message& msg, Client& client);
@@ -93,6 +99,7 @@ private:
 	                  bool adding, size_t& paramIndex);
 	void	handleModeLimit(const Message& msg, Client& client, Channel& channel,
 	                     ChannelModes& modes, bool adding, size_t& paramIndex);
+	void	handleBan(Client& client, Channel& channel, const std::string& chanName);
 	void	broadcastModeChange(Client& client, Channel& channel, const Message& msg);
 
 	// ====== その他 ======

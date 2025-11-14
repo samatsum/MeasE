@@ -4,68 +4,104 @@
 #include <sstream>
 #include <iostream>
 #include <cstdlib>
+#include <cerrno>
 
 /*
 324の返答が、ちとあとでチェック
+mode #チャンネル名 b　で、オペレーターの連投はとりあえずアドホック対応
+リミット処理の以上はチャンネル内部で知ることができない？
 
-・ユーザーモードのフラグ変更
-たとえば、チャンネル
+・つかいかた
+MODE #channel [+|-]modes [params]
+modes:
+i - invite only
+t - topic protected
+k - key (password)
+o - operator
+l - user limit
+
+kiはおｋぽい。
+
 
 */
 
 void CommandHandler::handleMode(const Message& msg, Client& client) {
-	if (!client.isAuthenticated())
-		return sendMsg(client.getFd(), "451", client.getNickName(), "You have not registered");
+	if (!requireAuth(client, "MODE"))
+		return;
 
-	if (msg.params.empty())
-		return sendMsg(client.getFd(), "461", client.getNickName(), "MODE :Not enough parameters");
+	if (msg.params.empty()) {
+		sendError(client, "461", "MODE", "Not enough parameters");
+		return;
+	}
 
-	if (msg.params[0][0] != '#')
-		return handleUserMode(msg, client);
+	if (msg.params[0][0] != '#') {
+		handleUserMode(msg, client);
+		return;
+	}
 
 	handleChannelMode(msg, client);
 }
 
-//ユーザーモードは非対応
+// --- ユーザーモードは非対応 ---
 void CommandHandler::handleUserMode(const Message& msg, Client& client) {
 	(void)msg;
-	sendMsg(client.getFd(), "501", client.getNickName(), ":User modes are not supported on this server");
+	sendError(client, "501", "MODE", "User modes are not supported on this server");
 }
 
+// --- チャンネルモード ---
 void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
-
 	const std::string& target = msg.params[0];
 	Channel* channel = m_server.findChannel(target);
 
-	if (!channel)
-		return sendMsg(client.getFd(), "403", client.getNickName(), target + " :No such channel");
-	if (!channel->hasMember(client.getFd()))
-		return sendMsg(client.getFd(), "442", client.getNickName(), target + " :You're not on that channel");
+	if (!channel) {
+		sendError(client, "403", target, "No such channel");
+		return;
+	}
+	if (!channel->hasMember(client.getFd())) {
+		sendError(client, "442", target, "You're not on that channel");
+		return;
+	}
 
-	// --- モード確認だけ ---
-	if (msg.params.size() == 1)
-		return replyChannelModes(client, *channel, target);
+	// --- モード確認のみ ---
+	// if (msg.params.size() == 1) {
+	// 	replyChannelModes(client, *channel, target);
+	// 	return;
+	// }
+	if (msg.params.size() == 1 || (msg.params.size() >= 2 && msg.params[1].empty())) {
+		replyChannelModes(client, *channel, target);
+		return;
+	}
 
 	// --- 権限チェック ---
-	if (!channel->isOperator(client.getFd()))
-		return sendMsg(client.getFd(), "482", client.getNickName(), target + " :You're not channel operator");
+	if (!(msg.params.size() >= 2 && msg.params[1] == "b")) {
+		if (!channel->isOperator(client.getFd())) {
+			sendError(client, "482", target, "You're not channel operator");
+			return;
+		}
+	}
+	// if (!channel->isOperator(client.getFd())) {
+	// 	sendError(client, "482", target, "You're not channel operator");
+	// 	return;
+	// }
 
 	applyChannelMode(msg, client, *channel);
 }
 
+// --- チャンネルモード一覧返信 (324) ---
 void CommandHandler::replyChannelModes(Client& client, Channel& channel, const std::string& target) {
 	const ChannelModes& modes = channel.getModes();
-
 	std::ostringstream modeLine;
+
 	modeLine << "+";
 	if (modes.inviteOnly) modeLine << "i";
 	if (modes.topicProtected) modeLine << "t";
 	if (!modes.passKey.empty()) modeLine << "k";
 	if (modes.userLimit > 0 && modes.userLimit != 1000) modeLine << "l";
 
-	sendMsg(client.getFd(), "324", client.getNickName(), target + " " + modeLine.str());
+	sendChanReply(client.getFd(), "324", client.getNickName(), target, modeLine.str());
 }
 
+// --- モード適用処理 ---
 void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channel& channel) {
 	std::string modeFlags = msg.params[1];
 	bool adding = true;
@@ -100,9 +136,11 @@ void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channe
 			case 'l':
 				handleModeLimit(msg, client, channel, modes, adding, paramIndex);
 				break;
+			case 'b':
+				handleBan(client, channel, channel.getName());
+				break;
 			default:
-				sendMsg(client.getFd(), "472", client.getNickName(),
-				        std::string(1, m) + " :is unknown mode character");
+				sendError(client, "472", std::string(1, m), "is unknown mode character");
 				break;
 		}
 	}
@@ -111,60 +149,90 @@ void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channe
 	broadcastModeChange(client, channel, msg);
 }
 
-void CommandHandler::handleModeKey(const Message& msg, Client& client, Channel& channel, ChannelModes& modes,
-	                                   bool adding, size_t& paramIndex) {
+// --- +k (key) 処理 ---
+void CommandHandler::handleModeKey(const Message& msg, Client& client, Channel& channel,
+                                   ChannelModes& modes, bool adding, size_t& paramIndex) {
 	(void)channel;
 	if (adding) {
-		if (paramIndex >= msg.params.size())
-			return sendMsg(client.getFd(), "461", client.getNickName(), "MODE +k :Missing parameter");
+		if (paramIndex >= msg.params.size()) {
+			sendError(client, "461", "MODE", "Missing parameter for +k");
+			return;
+		}
 		modes.passKey = msg.params[paramIndex++];
 	} else {
 		modes.passKey.clear();
 	}
 }
 
+// --- +o (operator) 処理 ---
 void CommandHandler::handleModeOp(const Message& msg, Client& client, Channel& channel,
                                   bool adding, size_t& paramIndex) {
-	if (paramIndex >= msg.params.size())
-		return sendMsg(client.getFd(), "461", client.getNickName(), "MODE +o :Missing parameter");
+	if (paramIndex >= msg.params.size()) {
+		sendError(client, "461", "MODE", "Missing parameter for +o");
+		return;
+	}
 
 	std::string nick = msg.params[paramIndex++];
 	bool found = false;
-
 	const std::map<int, Client*>& members = channel.getMembers();
+
 	for (std::map<int, Client*>::const_iterator it = members.begin(); it != members.end(); ++it) {
 		if (it->second->getNickName() == nick) {
-			if (adding) channel.addOperator(it->first);
-			else channel.removeOperator(it->first);
+			if (adding)
+				channel.addOperator(it->first);
+			else
+				channel.removeOperator(it->first);
 			found = true;
 			break;
 		}
 	}
+
 	if (!found)
-		sendMsg(client.getFd(), "441", client.getNickName(), nick + " " + channel.getName() + " :They aren't on that channel");
+		sendError(client, "441", nick, "They aren't on that channel");
 }
 
-void CommandHandler::handleModeLimit(const Message& msg, Client& client, Channel& channel,
-	                                     ChannelModes& modes, bool adding, size_t& paramIndex) {
+// --- +l (limit) 処理 ---
+void CommandHandler::handleModeLimit(const Message& msg, Client& client,
+                                     Channel& channel, ChannelModes& modes,
+                                     bool adding, size_t& paramIndex)
+{
+	(void)modes;
 	(void)channel;
+
 	if (adding) {
-		if (paramIndex >= msg.params.size())
-			return sendMsg(client.getFd(), "461", client.getNickName(), "MODE +l :Missing parameter");
-		int limit = std::atoi(msg.params[paramIndex++].c_str());
-		modes.userLimit = (limit > 0) ? limit : 1000;
+		if (paramIndex >= msg.params.size()) {
+			sendError(client, "461", "MODE", "Missing parameter for +l");
+			return;
+		}
+
+		char* endptr;
+		errno = 0;
+		int limit = std::strtol(msg.params[paramIndex++].c_str(), &endptr, 10);
+		if (errno != 0 || *endptr != '\0' || limit < 0 || limit > 1000) {
+			sendError(client, "461", "MODE", "Invalid limit parameter");
+			return;
+		}
+		// if (limit == 0 && msg.params[paramIndex - 1] != "0") {
+		// 	sendError(client, "461", "MODE", "Invalid limit parameter");
+		// 	return;
+		// }
+
+		modes.userLimit = limit;
 	} else {
-		modes.userLimit = 1000; // default
+		modes.userLimit = 1000; // デフォルト
 	}
 }
 
+void CommandHandler::handleBan(Client& client, Channel& channel, const std::string& chanName) {
+
+	(void)channel;
+    sendChanReply(client.getFd(), "367", client.getNickName(), chanName, "*!*@*");
+    sendChanReply(client.getFd(), "368", client.getNickName(), chanName, "End of channel ban list");
+}
+
+// --- モード変更通知 ---
 void CommandHandler::broadcastModeChange(Client& client, Channel& channel, const Message& msg) {
-	std::ostringstream modeMsg;
-	modeMsg << ":" << client.makePrefix()
-	        << " MODE " << msg.params[0] << " " << msg.params[1];
-
-	for (size_t i = 2; i < msg.params.size(); ++i)
-		modeMsg << " " << msg.params[i];
-	modeMsg << "\r\n";
-
-	channel.broadcast(modeMsg.str());
+	std::string prefix = client.makePrefix();
+	std::string out = buildMessage(prefix, "MODE", msg.params, "");
+	channel.broadcast(out);
 }

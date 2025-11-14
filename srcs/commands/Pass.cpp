@@ -14,28 +14,29 @@ PASS（1459）
 */
 
 
-void CommandHandler::handlePass(const Message& msg, Client& client) {
-
+void CommandHandler::handlePass(const Message& msg, Client& client)
+{
+	//登録済みチェック
 	if (client.isRegistered()) {
-		sendMsg(client.getFd(), "462", client.getNickName(), "You may not reregister");
+		sendError(client, "462", "PASS", "You may not reregister");
 		return;
 	}
 
+	//パラメータ不足
 	if (msg.params.empty()) {
-		sendMsg(client.getFd(), "461", "PASS", "Not enough parameters");
+		sendError(client, "461", "PASS", "Not enough parameters");
 		return;
 	}
 
-	if (msg.params[0] == m_server.getPassword()) {
-
+	//パスワード確認
+	const std::string& password = msg.params[0];
+	if (password == m_server.getPassword()) {
 		client.setAuthenticated(true);
 		std::cout << "[fd " << client.getFd() << "] PASS accepted" << std::endl;
 	} else {
-
-		sendMsg(client.getFd(), "464", client.getNickName(), "Password incorrect");
-		//総当り攻撃を許すことになるので、即座に接続を閉じる。
+		sendError(client, "464", "PASS", "Password incorrect");
 		std::cout << "[fd " << client.getFd() << "] PASS incorrect, closing connection" << std::endl;
-		m_server.requestClientClose(client.getFd());
+		m_server.requestClientClose(client.getFd()); // 総当たり防止のため切断
 		return;
 	}
 

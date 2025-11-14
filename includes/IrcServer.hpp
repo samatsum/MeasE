@@ -58,6 +58,7 @@ class IrcServer{
 		std::map<int, Client>&	getClients();
 
 		bool	isNickInUse(const std::string& nick) const;
+		Client*	findClientByNick(const std::string& nick);
 
 		//チャンネルAPI
 		Channel&	getCreateChannel(const std::string& name);

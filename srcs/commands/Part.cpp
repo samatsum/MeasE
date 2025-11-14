@@ -8,53 +8,52 @@
 #include <cerrno>
 
 /*
-/partでirssiから抜けれてない。チャンネル指定されてないとだめ？
-→irssiの挙動で、 /window close　が必要、勝手に抜けるわけとちゃうよ
 
 
 */
 
-void CommandHandler::handlePart(const Message& msg, Client& client) {
-
-	if (!client.isAuthenticated()) {
-		sendMsg(client.getFd(), "451", client.getNickName(), "You have not registered");
+void CommandHandler::handlePart(const Message& msg, Client& client)
+{
+	if (!requireAuth(client, "PART"))
 		return;
-	}
-
 	if (msg.params.empty()) {
-		sendMsg(client.getFd(), "461", client.getNickName(), "PART :Not enough parameters");
+		sendError(client, "461", "PART", "Not enough parameters");
 		return;
 	}
 
 	std::string channelName = msg.params[0];
 	Channel* channel = m_server.findChannel(channelName);
 	if (!channel) {
-		sendMsg(client.getFd(), "403", client.getNickName(), channelName + " :No such channel");
+		sendError(client, "403", channelName, "No such channel");
 		return;
 	}
 	if (!channel->hasMember(client.getFd())) {
-		sendMsg(client.getFd(), "442", client.getNickName(), channelName + " :You're not on that channel");
+		sendError(client, "442", channelName, "You're not on that channel");
 		return;
 	}
 
-	//トレーリングが空なら、ニックネームで埋める。
 	std::string reason;
-	if (msg.trailing.empty()) {
+	if (msg.trailing.empty())
 		reason = client.getNickName();
-	} else {
+	else
 		reason = msg.trailing;
-	}
 
-	std::ostringstream partMsg;
-	partMsg << ":" << client.makePrefix()
-	        << " PART " << channelName << " :" << reason << "\r\n";
+	std::vector<std::string> params;
+	params.push_back(channelName);
+	std::string partMsg = buildMessage(client.makePrefix(), "PART", params, reason);
 
-	channel->broadcast(partMsg.str());
+	channel->broadcast(partMsg);
+	sendMsg(client.getFd(), partMsg);
 
+	// --- チャンネルから削除 ---
+	channel->removeOperator(client.getFd());//再度入った時を考慮
 	client.leaveChannel(channelName);
 	channel->removeMember(client.getFd());
 
-	if (channel->getMemberCount() == 0) {
+	//最後のメンバーならチャンネル削除
+	if (channel->getMemberCount() == 0)
 		m_server.removeChannel(channelName);
-	}
+
+	std::cout << "[fd " << client.getFd() << "] PART " << channelName
+	          << " (" << reason << ")" << std::endl;
 }
