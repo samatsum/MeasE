@@ -1,6 +1,7 @@
 #include "../includes/Client.hpp"
 #include <unistd.h>
 #include <cstdlib>
+
 /*
 【概要】
 クライアントごとの情報を管理するクラス。
@@ -191,7 +192,8 @@ int Client::calcBotBJTotal() const
         }
         else
         {
-            total += std::atoi(card.c_str());
+			//total += std::stoi(card);
+			total += std::atoi(card.c_str());//std::stringstreamなら、"abc" のような変換できない文字列を 0 として返すことは無いけどめんどくさい。
         }
     }
 

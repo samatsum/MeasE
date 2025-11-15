@@ -40,7 +40,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJ)
 
-strict: CXXFLAGS = $(STRICT_FLAGS)
+strict: CXXFLAGS = $(STRICTFLAGS)
 strict: re
 
 debug: CXXFLAGS += -g -DDEBUG

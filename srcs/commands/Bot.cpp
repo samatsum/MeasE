@@ -9,9 +9,11 @@
 #include <cerrno>
 #include <ctime>
 #include <cctype>
-//#include <random>
+//#include <random> C++98ではない
+#include <sstream>
 #include <cstdlib> // std::rand(), std::srand() のため
 #include <ctime>   // std::time() のため
+
 /*
 基本的な考え
 
@@ -264,13 +266,13 @@ void CommandHandler::handleChinchiro(const Message& msg, Client& client)
         else if (a == c) eye = b;
         else eye = a;
 
-    // 変更前:
-    // role = "MEARI（" + std::to_string(eye) + "）";
+        // 変更前:
+        // role = "MEARI（" + std::to_string(eye) + "）";
 
-    // 変更後:
-    std::stringstream ss_eye;
-    ss_eye << eye; // 数値をストリームに入れる
-    role = "MEARI（" + ss_eye.str() + "）"; // .str() で string として取り出す
+        // 変更後:
+        std::stringstream ss_eye;
+        ss_eye << eye; // 数値をストリームに入れる
+        role = "MEARI（" + ss_eye.str() + "）"; // .str() で string として取り出す
     }
     else
     {
@@ -359,22 +361,21 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
         channel->broadcast(out, -1);
     }
 
-    std::srand(std::time(NULL) + nick[0]);//nickはいらん気がする。なんかバイアスが5,6が多い気が。（10は多いのは当然）
+    std::srand(std::time(NULL) + nick[0]);//nickはいらん気がする。なんかバイアスが10と5、6が多い。
     int r = std::rand() % 13;  
     std::string card;
     if (r == 0)
         card = "0";         // Ace
     else if (1 <= r && r <= 9)
     {
-    // 変更前:
-    // card = std::to_string(r); // 1～9
+        // 変更前:
+        // card = std::to_string(r); // 1～9
 
-    // 変更後:
-    std::stringstream ss_card;
-    ss_card << r;
-    card = ss_card.str(); // 1～9
-    }
-    else if (r == 10)
+        // 変更後:
+        std::stringstream ss_card;
+        ss_card << r;
+        card = ss_card.str(); // 1～9
+    }else if (r == 10)
         card = "J";
     else if (r == 11)
         card = "Q";
@@ -392,7 +393,8 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
         if (card == "0")
             point = 11; //計算と合致してないかも。
         else
-            point = std::atoi(card.c_str());
+            //    point = std::stoi(card);
+            point = std::atoi(card.c_str());//std::stringstreamなら、"abc" のような変換できない文字列を 0 として返すことは無いけどめんどくさい。
     }
 
     std::stringstream ss;
