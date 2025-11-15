@@ -8,8 +8,6 @@
 #include <cerrno>
 
 /*
-複数ユーザーの指定
-
 Error　Reply（2812）
 401 ERR_NOSUCHNICK - ニックネームなし
 402　→マルチサーバなので関係なし

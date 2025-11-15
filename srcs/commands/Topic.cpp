@@ -75,7 +75,8 @@ void CommandHandler::handleTopic(const Message& msg, Client& client)
 	}
 
 	if (modes.topicProtected && !channel->isOperator(client.getFd())) {
-		sendChanReply(client.getFd(), "482", client.getNickName(), channelName, "You're not channel operator");
+		//sendChanReply(client.getFd(), "482", client.getNickName(), channelName, "You're not channel operator");
+		sendError(client, "NOTICE", channelName, "You are not channel operator (+t requires op)");	
 		return;
 	}
 

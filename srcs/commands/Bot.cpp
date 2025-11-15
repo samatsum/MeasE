@@ -9,10 +9,7 @@
 #include <cerrno>
 #include <ctime>
 #include <cctype>
-//#include <random> C++98ではない
-#include <sstream>
-#include <cstdlib> // std::rand(), std::srand() のため
-#include <ctime>   // std::time() のため
+//#include <random>
 
 /*
 基本的な考え
@@ -48,6 +45,8 @@ BOT : you drew 7 of Hearts [point 7]
 データをクライアントに持たせるならば、メンバに
 std::vector<std::string> m_botCards;
 を持たせる。（ニックネームの変更にも対応しやすい予感。）
+【♠】→チャンネルにfdで持たせるべきかも。
+
 ここで、カードは、
 文字列で、0〜9（1から10として扱う、つまりAは0で内部保存される。）、JQKの10は、JQKとして扱い保存する。一度に引いたカードは、1文字で保存する。
 ここのデータリストを参考にすることで、サイズで、何回引いたかもわかる。
@@ -76,6 +75,8 @@ BOT : You chose to stand with total point 18.
 例えば、5回引かせないようにすれば、ハートや、スペードのような違いを無視することができる。
 
 もしくは、全種類のカードを保存して、同じカードを引かせないのも手。
+
+timeは再利用しているので、どこかに保存してもいい？
 
 */
 
@@ -106,6 +107,11 @@ void CommandHandler::handleBot(const Message& msg, Client& client)
     else if (text == "!b" || text == "!s" || (text.size() > 2 && text.rfind("!b ", 0) == 0) || (text.size() > 2 && text.rfind("!s ", 0) == 0))
     {
         handleBlackjack(msg, client);
+        return;
+    }
+    else if (text == "!r" || (text.size() > 2 && text.rfind("!r ", 0) == 0))
+    {
+        handleRandomSelect(msg, client);
         return;
     }
 
@@ -218,20 +224,32 @@ void CommandHandler::handleChinchiro(const Message& msg, Client& client)
 
     const std::string& nick = client.getNickName();
     int d1, d2, d3;
+    std::srand(time(NULL) + nick[0]);
 
     if (nick == "hancho" || nick == "isawa" || nick == "numakawa" || nick == "isinuma" || nick == "otsuki")
     {
-        //順番を変えてもいいかも。
-        d1 = 4; d2 = 5; d3 = 6;
+        d1 = (std::rand() % 3) + 4;
+        d2 = (std::rand() % 3) + 4;
+        d3 = (std::rand() % 3) + 4;
     }
     else if (nick == "kaiji" || nick == "oohba")
     {
-        d1 = 1; d2 = 1; d3 = 1;
+        int r = std::rand() % 10;
+        if (r < 5)
+        {
+            d1 = 1;
+            d2 = 1;
+            d3 = 1;
+        }
+        else
+        {
+            d1 = (std::rand() % 3) + 4;
+            d2 = (std::rand() % 3) + 4;
+            d3 = (std::rand() % 3) + 4;
+        }
     }
     else
     {
-        std::srand(time(NULL) + nick[0]);
-
         d1 = (std::rand() % 6) + 1;
         d2 = (std::rand() % 6) + 1;
         d3 = (std::rand() % 6) + 1;
@@ -266,13 +284,12 @@ void CommandHandler::handleChinchiro(const Message& msg, Client& client)
         else if (a == c) eye = b;
         else eye = a;
 
-        // 変更前:
+        // // 変更前
         // role = "MEARI（" + std::to_string(eye) + "）";
-
-        // 変更後:
+        // 変更後 (stringstream を使う)
         std::stringstream ss_eye;
-        ss_eye << eye; // 数値をストリームに入れる
-        role = "MEARI（" + ss_eye.str() + "）"; // .str() で string として取り出す
+        ss_eye << eye;
+        role = "MEARI（" + ss_eye.str() + "）";
     }
     else
     {
@@ -302,7 +319,7 @@ void CommandHandler::handleChinchiro(const Message& msg, Client& client)
 void CommandHandler::handleBlackjack(const Message& msg, Client& client)
 {
     const std::string& text = msg.trailing;
-    const std::string& nick = client.getNickName();
+    std::string nick = client.getNickName();
 
     const std::string& channelName = msg.params[0];
     Channel* channel = m_server.findChannel(channelName);
@@ -317,7 +334,7 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
     {
         if (client.getBotCardCount() == 0)
         {
-            std::string botMessage = "BOT: You have not started Blackjack yet.";
+            std::string botMessage = "BOT: " + nick + " has not started Blackjack yet.";
             std::string out = buildMessage(m_serverName, "PRIVMSG",
                                            std::vector<std::string>(1, channelName),
                                            botMessage);
@@ -327,7 +344,7 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
 
         int total = client.calcBotBJTotal();
         std::stringstream ss;
-        ss << "BOT: You chose to stand with total point " << total << ".";
+        ss << "BOT: " << nick << " chose to stand with total point " << total << ".";
         std::string botMessage = ss.str();
 
         std::string out = buildMessage(m_serverName, "PRIVMSG",
@@ -342,7 +359,7 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
     //!b が5回目　カードの柄を内部で保存してないので、5回目を超えたら強制バースト
     if (client.getBotCardCount() >= 5)
     {
-        std::string botMessage = "BOT: You have drawn 5 cards. BUST!";
+        std::string botMessage = "BOT: " + nick + " has drawn 5 cards. BUST!";
         std::string out = buildMessage(m_serverName, "PRIVMSG",
                                        std::vector<std::string>(1, channelName),
                                        botMessage);
@@ -354,28 +371,29 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
 
     if (client.getBotCardCount() == 0)
     {
-        std::string botMessage = "BOT: Welcome to Simple Blackjack! There is no five cards.";
+        std::string botMessage = "BOT: [Simple Black Jack] Welcome " + nick + "! There is no five cards.";
         std::string out = buildMessage(m_serverName, "PRIVMSG",
                                        std::vector<std::string>(1, channelName),
                                        botMessage);
         channel->broadcast(out, -1);
     }
 
-    std::srand(std::time(NULL) + nick[0]);//nickはいらん気がする。なんかバイアスが10と5、6が多い。
+    std::srand(std::time(NULL));
     int r = std::rand() % 13;  
     std::string card;
     if (r == 0)
         card = "0";         // Ace
     else if (1 <= r && r <= 9)
     {
-        // 変更前:
-        // card = std::to_string(r); // 1～9
+        // 変更前
+        //card = std::to_string(r); // 1～9
 
-        // 変更後:
+        // 変更後 (stringstream を使う)
         std::stringstream ss_card;
         ss_card << r;
         card = ss_card.str(); // 1～9
-    }else if (r == 10)
+    }
+    else if (r == 10)
         card = "J";
     else if (r == 11)
         card = "Q";
@@ -391,16 +409,19 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
     else
     {
         if (card == "0")
-            point = 11; //計算と合致してないかも。
+            point = 11;
         else
-            //    point = std::stoi(card);
-            point = std::atoi(card.c_str());//std::stringstreamなら、"abc" のような変換できない文字列を 0 として返すことは無いけどめんどくさい。
+            point = std::atoi(card.c_str());
     }
 
     std::stringstream ss;
     if (card == "0")
+    {
         card = "Ace";
-    ss << "BOT: you drew " << card << " [point " << point << "]";
+        ss << "BOT: " << nick << " drew " << card << " [point 11 or 1]";
+    }
+    else
+        ss << "BOT: " << nick << " drew " << card << " [point " << point << "]";
 
     if (client.getBotCardCount() > 1)
         ss << ", total point " << total;
@@ -417,7 +438,7 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
     }
     else if (client.getBotCardCount() >= 5)
     {
-        ss << ". You have drawn 5 cards. BUST!";
+        ss << ". " << nick << " has drawn 5 cards. BUST!";
         client.resetBotCards();
     }
 
@@ -429,7 +450,50 @@ void CommandHandler::handleBlackjack(const Message& msg, Client& client)
     channel->broadcast(out, -1);
 }
 
+void CommandHandler::handleRandomSelect(const Message& msg, Client& client)
+{
+    const std::string &channelName = msg.params[0];
+	Channel *channel = m_server.findChannel(channelName);
+	if (!channel)
+	{
+		sendError(client, "403", channelName, "No such channel");
+		return;
+	}
 
+	const std::map<int, Client*> &members = channel->getMembers();
+	if (members.empty())
+		return;
+
+	std::vector<Client*> list;
+	for (std::map<int, Client*>::const_iterator it = members.begin();
+		 it != members.end(); ++it)
+	{
+		Client *cl = it->second;
+		list.push_back(cl);
+	}
+
+    //日付とメンバー数でシードを作る。botを呼び出すたびに、人が変わるを避ける。ただ、内部で保存しないので簡易な実装。
+    time_t now = time(NULL);
+    struct tm* lt = localtime(&now);
+    int y = lt->tm_year + 1900;
+    int m = lt->tm_mon + 1;
+    int d = lt->tm_mday;
+    int dateSeed = y + m + d + members.size();
+
+	std::srand(dateSeed);
+
+	int idx = std::rand() % list.size();
+	Client *selected = list[idx];
+    //一人しかいないときはメッセージを変更する。
+    std::string botMessage;
+    if (list.size() == 1)
+        botMessage = "BOT: HEY! THERE IS NO ONE ELSE BUT YOU " + selected->getNickName();
+    else
+	    botMessage = "BOT: ATTENTION PLEASE! TODAY'S PERSON IS " + selected->getNickName() + "!";
+	std::string out = buildMessage(m_serverName, "PRIVMSG",
+		std::vector<std::string>(1, channelName), botMessage);
+	channel->broadcast(out, -1);
+}
 
 /*
     //seedを作る。

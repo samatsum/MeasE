@@ -6,6 +6,7 @@
 #include <stdexcept> //for std::runtime_error
 #include <unistd.h> //for write
 #include "../includes/IrcServer.hpp"
+#include "../includes/Utils.hpp"
 
 /*
 port番号は、1023までは特権ポート、49152以上はクライアント側で使うダイナミックポート。
@@ -25,7 +26,7 @@ int	main(int argc, char **argv)
 	int					port;
 	std::string			passWord;
 	struct sigaction	sa;
-
+	
 	std::memset(&sa, 0, sizeof(sa));
 	if (!checkArgs(argc, argv, port, passWord))
 		return 1;
@@ -73,6 +74,10 @@ static bool checkArgs(int argc, char **argv, int &port, std::string &passWord)
 
 	port = static_cast<int>(val);
 	passWord = argv[2];
+	if (!isAcceptablePassword(passWord)) {
+		std::cerr << "Error: Password must be 4-16 characters long with no character repeated 3 or more times." << std::endl;
+		return (false);
+	}
 	return (true);
 }
 
@@ -95,3 +100,4 @@ static void SetUpSignalHandlers(struct sigaction &sa)
 	if (sigaction(SIGQUIT, &sa, NULL))
 		throw(std::runtime_error("Error: Failed to set signal handler for SIGQUIT"));
 }
+

@@ -25,6 +25,7 @@ rfc2812
 
 //チャンネル名は大文字、小文字を区別しない。
 チャンネル作成者が、オペレーターになるが、そいつが抜けた場合はどうする？(RFC1459)
+一応、
 
 インバイトモードでも、招待されてないユーザーがすでにインバイトモードに指定されたチャンネルを
 開こうとするとチャンネル画面は開けるが、メッセージの送受信はできない。
@@ -92,22 +93,25 @@ void CommandHandler::handleJoin(const Message& msg, Client& client)
 	if (channel.getMemberCount() == 1)
 		channel.addOperator(client.getFd());
 
+	//JOIN通知
 	{
 		std::vector<std::string> params;
 		params.push_back(channelName);
 
 		std::string prefix = client.makePrefix(); // nick!user@host
 		std::string out = buildMessage(prefix, "JOIN", params, "");
-		channel.broadcast(out);
-		sendMsg(client.getFd(), out);
+		channel.broadcast(out, -1);
 	}
 
-	if (!channel.getTopic().empty()) {
+	//RPL_TOPIC
+	{
 		std::vector<std::string> p;
 		p.push_back(client.getNickName());
 		p.push_back(channelName);
-
-		sendMsg(client.getFd(), "", "332", p, channel.getTopic());
+		if (channel.getTopic().empty())
+			sendMsg(client.getFd(), "", "331", p, "No topic is set");
+		else
+			sendMsg(client.getFd(), "", "332", p, channel.getTopic());
 	}
 
 	// RPL_NAMREPLY

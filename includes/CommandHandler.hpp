@@ -109,6 +109,7 @@ private:
 	void	handleOmikuji(const Message& msg, Client& client);
 	void	handleChinchiro(const Message& msg, Client& client);
 	void	handleBlackjack(const Message& msg, Client& client);
+	void	handleRandomSelect(const Message& msg, Client& client);
 
 	// ====== ユーティリティ系 ======
 	std::string	makeUppercase(const std::string& argStr);

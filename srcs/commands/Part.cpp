@@ -10,6 +10,7 @@
 /*
 
 
+
 */
 
 void CommandHandler::handlePart(const Message& msg, Client& client)
@@ -43,7 +44,7 @@ void CommandHandler::handlePart(const Message& msg, Client& client)
 	std::string partMsg = buildMessage(client.makePrefix(), "PART", params, reason);
 
 	channel->broadcast(partMsg);
-	sendMsg(client.getFd(), partMsg);
+	//sendMsg(client.getFd(), partMsg);
 
 	client.resetBotCards();
 

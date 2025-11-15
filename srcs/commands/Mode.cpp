@@ -1,6 +1,7 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
+#include "../../includes/Utils.hpp"
 #include <sstream>
 #include <iostream>
 #include <cstdlib>
@@ -8,8 +9,7 @@
 
 /*
 324の返答が、ちとあとでチェック
-mode #チャンネル名 b　で、オペレーターの連投はとりあえずアドホック対応
-リミット処理の以上はチャンネル内部で知ることができない？
+リミット処理の異常はチャンネル内部で知ることができない？
 
 ・つかいかた
 MODE #channel [+|-]modes [params]
@@ -21,6 +21,31 @@ o - operator
 l - user limit
 
 kiはおｋぽい。
+
+フラグとか考えないで、
+bが、あったら、最初に処理して、paramsから抜く、これで行く。
+
+
+irssiで
+/mode +iをやると
+MODE #gen +i
+として送ってくれる
+サーバーが、482を返す挙動が確認できる。
+しかし、irssiではチャンネルウィンドウから追い出されて
+サーバーではメンバーだが、クライアント側ではメンバーでない状態になる。
+ただ、チャンネルメッセージは見ることができる。
+
+権限がないのに、モード変更を試みると+tでも
+追い出された。
+
+多分だが、482の返答では、クライアント上で追放してくる。
+サーバーでは追放しないで、クライアントでは追放されてしまい整合しない。
+そのため。
+NOTICE（返信や自動応答を期待しない情報通知）で返すように変更。
+サーバーの返答が悪いのかもしれないが、NOTICEで対応。
+
+RFC1459では、チャンネルモードはオペレーター用になる（しかし、bはどうなんだと。）
+しかも適切に返答しないと、mode bを連投してくる。尋ねるのはええんか。
 
 
 */
@@ -72,19 +97,53 @@ void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 		return;
 	}
 
-	// --- 権限チェック ---
-	if (!(msg.params.size() >= 2 && msg.params[1] == "b")) {
-		if (!channel->isOperator(client.getFd())) {
-			sendError(client, "482", target, "You're not channel operator");
+	if (msg.params[1].find('b') != std::string::npos) {
+		handleBan(client, *channel, target);
+
+		//+b, -b, bの場合はここで終わらせる
+		bool onlyB = true;
+		for (size_t i = 0; i < msg.params[1].size(); ++i) {
+			char c = msg.params[1][i];
+			if (c != '+' && c != '-' && c != 'b') {
+				onlyB = false;
+				break;
+			}
+		}
+		if (onlyB) {
 			return;
 		}
 	}
+
+	std::string cleaned;
+	for (size_t i = 0; i < msg.params[1].size(); ++i) {
+		if (msg.params[1][i] != 'b') {
+			cleaned += msg.params[1][i];
+		}
+	}
+	
+	Message newMsg = msg;
+	newMsg.params[1] = cleaned;
+
+	if (!channel->isOperator(client.getFd())) {
+		//sendError(client, "482", target, "You're not channel operator");
+		//NOTICE <user> :You are not channel operator (+i requires op)を返す。
+		//482をやめる。
+		sendError(client, "NOTICE", target, "You are not channel operator (+" + cleaned + " requires op)");		
+		return;
+	}
+	// --- 権限チェック ---　これは複数のコマンドが入らない。
+	// if (!(msg.params.size() >= 2)) {
+	// 	if (!channel->isOperator(client.getFd())) {
+	// 		sendError(client, "482", target, "You're not channel operator");
+	// 		return;
+	// 	}
+	// }
 	// if (!channel->isOperator(client.getFd())) {
 	// 	sendError(client, "482", target, "You're not channel operator");
 	// 	return;
 	// }
 
-	applyChannelMode(msg, client, *channel);
+	applyChannelMode(newMsg, client, *channel);
 }
 
 // --- チャンネルモード一覧返信 (324) ---
@@ -136,9 +195,6 @@ void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channe
 			case 'l':
 				handleModeLimit(msg, client, channel, modes, adding, paramIndex);
 				break;
-			case 'b':
-				handleBan(client, channel, channel.getName());
-				break;
 			default:
 				sendError(client, "472", std::string(1, m), "is unknown mode character");
 				break;
@@ -159,6 +215,11 @@ void CommandHandler::handleModeKey(const Message& msg, Client& client, Channel& 
 			return;
 		}
 		modes.passKey = msg.params[paramIndex++];
+		if (!isAcceptablePassword(modes.passKey)) {
+			sendError(client, "467", "MODE", "Invalid channel key");
+			modes.passKey.clear();
+			return;
+		}
 	} else {
 		modes.passKey.clear();
 	}

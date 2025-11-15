@@ -12,6 +12,7 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/Client.cpp \
        $(SRC_DIR)/Channel.cpp \
        $(SRC_DIR)/CommandHandler.cpp \
+	   $(SRC_DIR)/utils.cpp \
 	   $(CMD_DIR)/Bot.cpp \
 	   $(CMD_DIR)/Cap.cpp \
 	   $(CMD_DIR)/Invite.cpp \
@@ -40,7 +41,7 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJ)
 
-strict: CXXFLAGS = $(STRICTFLAGS)
+strict: CXXFLAGS = $(STRICT_FLAGS)
 strict: re
 
 debug: CXXFLAGS += -g -DDEBUG

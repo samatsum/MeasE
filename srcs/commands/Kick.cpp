@@ -43,7 +43,8 @@ void CommandHandler::handleKick(const Message& msg, Client& client)
 		return;
 	}
 	if (!ch->isOperator(client.getFd())) {
-		sendError(client, "482", channelName, "You're not channel operator");
+		sendError(client, "NOTICE", targetNick, "You are not channel operator (+" + channelName + " requires op)");	
+		//sendError(client, "482", channelName, "You're not channel operator");
 		return;
 	}
 

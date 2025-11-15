@@ -48,5 +48,3 @@ Raw line : PRIVMSG one :DCC SEND DCC.cpp ::1 49495 783
 [fd 6] -> [fd 5] PRIVMSG: DCC SEND DCC.cpp ::1 49495 783
 
 \*/
-
-@\x01a\\nb\\r\\nc\\n\x01@

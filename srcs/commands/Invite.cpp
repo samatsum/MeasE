@@ -19,6 +19,7 @@ INVITEは存在しないチャンネルへの招待も可能。（401は、ノ�
 
 AWAY設定はそもそもその状態の定義がないので不要。
 
+チャンネルの場所がおかしい？
 */
 
 void CommandHandler::handleInvite(const Message& msg, Client& client)
@@ -45,7 +46,8 @@ void CommandHandler::handleInvite(const Message& msg, Client& client)
 
 	const ChannelModes& modes = ch->getModes();
 	if (modes.inviteOnly && !ch->isOperator(client.getFd())) {
-		sendError(client, "482", channelName, "You're not channel operator");
+		sendError(client, "NOTICE", targetNick, "You are not channel operator (+" + channelName + " requires op)");	
+		// sendError(client, "482", channelName, "You're not channel operator");
 		return;
 	}
 
