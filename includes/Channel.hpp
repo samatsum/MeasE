@@ -5,11 +5,11 @@
 #include <string>
 #include <map>
 #include <set>
+#include <vector>
 
 class Client;
+class IrcServer;
 
-// i t k o l
-//limitsは、大きい数字にして、それを制限するようにしたら実装が楽になるのでは？メンバー数の制限を既存メソッドに反映。
 struct ChannelModes {
 	bool		inviteOnly;			// +i
 	bool		topicProtected;		// +t
@@ -18,23 +18,34 @@ struct ChannelModes {
 	ChannelModes() : inviteOnly(false), topicProtected(false), passKey(""), userLimit(1000) {}
 };
 
+struct BJState {
+    std::vector<std::string> cards; 
+    bool inGame;
+
+    BJState() : inGame(false) {}
+};
+
 class Channel {
 private:
-	//基本情報
+
 	std::string				m_name;
 	ChannelModes			m_channelModes;
-	//メンバ情報
-	std::map<int, Client*>	m_memberViews; // fdをキーにメンバー管理(メンバーの削除はサーバー経由で行う、ここは所有しない意図が命名にある)
-	std::set<std::string>	m_invitedNicks;//inviteOnlyがチャンネル設定時に入れる人を保存　JOINの時に削除する以外やることない？
-	std::set<int>			m_operators; // チャンネルオペレーターのfdを管理,先頭参加者をオペーレーターに、モードに持たせたほうがいい？
-	//トピック管理
+
+	IrcServer*				m_server;
+
+	std::map<int, Client*>	m_memberViews;
+	std::set<std::string>	m_invitedNicks;
+	std::set<int>			m_operators;
+
 	std::string				m_topic;
 	std::string				m_topicSetBy;
 	time_t					m_topicSetTime;
+
+	std::map<int, BJState> m_bjStates;
 	
 
 public:
-	explicit Channel(const std::string& name);
+	explicit Channel(const std::string& name, IrcServer* server);
 	~Channel();
 
 	const std::string&				getName() const;
@@ -46,7 +57,6 @@ public:
 	std::size_t						getMemberCount() const;
 
 	void				broadcast(const std::string& message, int excludeFd = -1);
-	void				broadcastAll(const std::string& message);
 
 	void				setTopic(const std::string& topic, const std::string& setBy);
 	const std::string&	getTopic() const;
@@ -60,10 +70,16 @@ public:
 	void				addOperator(int fd);
 	void				removeOperator(int fd);
 
-	//招待関係
 	void				addInvitedNick(const std::string& nick);
 	void				removeInvitedNick(const std::string& nick);
 	bool				isInvited(const std::string& nick) const;
+
+	void				startBJFor(int fd);  
+	void				addBJCard(int fd, const std::string &card);
+	int					calcBJTotal(int fd) const;
+	bool				isBJInGame(int fd) const;
+	void				resetBJ(int fd);
+	int 				getBJCardCount(int fd) const;
 };
 
 #endif // CHANNEL_HPP

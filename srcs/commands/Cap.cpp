@@ -1,10 +1,4 @@
 #include "../../includes/CommandHandler.hpp"
-#include <sys/socket.h>
-#include <cerrno>
-#include <cstring>
-#include <iostream>
-
-//IRCv3の対応で、まあ無視でもいいと思うが、一応。
 
 void CommandHandler::handleCAP(const Message& msg, Client& client)
 {
@@ -16,7 +10,6 @@ void CommandHandler::handleCAP(const Message& msg, Client& client)
 
 	std::string subcmd = makeUppercase(msg.params[0]);
 
-	// ニックネームが無い場合は *
 	std::string nick;
 	if (client.getNickName().empty())
 		nick = "*";

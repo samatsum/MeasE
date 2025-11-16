@@ -1,28 +1,15 @@
 #include "../includes/IrcServer.hpp"
 #include "../includes/Client.hpp"
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <poll.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-#include <stdexcept>
-#include <cstring>
-#include <iostream>
-#include <csignal>
-#include <netdb.h>
-#include <sstream>
-
-/*
-【概要】
-パケットを受け取り、クライアントクラスにバッファーする。
-新しい接続済ソケットを、クライアントクラスと結びつける。
-チャンネルとクライアントを所有して、生成削除のAPIを提供する。
-
-【予定】
-EINTRは、シグナル割り込みだが、ポール、アクセプト、レシーブで発生を考慮（ポール対応済み）
-
-*/
+#include <sys/socket.h>//for socket, bind, listen, accept
+#include <poll.h>//for poll
+#include <fcntl.h>//for fcntl, O_NONBLOCK
+#include <unistd.h>//for close
+#include <errno.h>//for errno
+#include <stdexcept>//for std::runtime_error
+#include <cstring>//for std::memset
+#include <csignal>//for sigatomic_t
+#include <netdb.h>//for getaddrinfo, freeaddrinfo
+#include <sstream>//for std::ostringstream
 
 typedef std::map<int, Client>::iterator ClientIt;
 typedef std::map<std::string, Channel>::iterator ChannelIt;
@@ -31,40 +18,38 @@ extern volatile sig_atomic_t g_signalCaught;
 
 void IrcServer::setUpSocket() {
 
-	struct addrinfo hints, *res, *p;//hintsは、インスタンス、resは、結果のリスト、pはループ用。
+	struct addrinfo hints, *res, *p;
 	const int optionOn = 1;
 	const int optionOff = 0;
 
 	std::memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;// IPv4/IPv6 両対応
-	hints.ai_socktype = SOCK_STREAM;//TCPソケット
-	hints.ai_flags = AI_PASSIVE;//任意のアドレスでバインドできるように。
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
 
 	std::ostringstream portStream;
 	portStream << m_port;
 
-	int status = getaddrinfo(NULL, portStream.str().c_str(), &hints, &res);//ipv6に対応できるかのチェックを開始
+	int status = getaddrinfo(NULL, portStream.str().c_str(), &hints, &res);
 	if (status != 0)
-		throw std::runtime_error(std::string("getaddrinfo failed: ") + gai_strerror(status));//gai_strerrorで、失敗原因を文字列で取得
+		throw std::runtime_error(std::string("getaddrinfo failed: ") + gai_strerror(status));
 
 	struct addrinfo *boundAddr = NULL;
 	for (int pass = 0; pass < 2 && boundAddr == NULL; ++pass) {
 		for (p = res; p != NULL; p = p->ai_next) {
 			if (pass == 0 && p->ai_family != AF_INET6)
-				continue;// 1周目はIPv6を優先
+				continue;
 			if (pass == 1 && p->ai_family == AF_INET6)
-				continue;// 2周目ではIPv4やその他のみを試す
+				continue;
 
 			m_listenFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 			if (m_listenFd < 0)
-				continue; // 次候補を試す
+				continue;
 
-			// IPv6の「IPv4マッピング無効」を有効に設定。リナックスだとデフォルトで無効らし。
 			if (p->ai_family == AF_INET6) {
 				setsockopt(m_listenFd, IPPROTO_IPV6, IPV6_V6ONLY, &optionOff, sizeof(optionOff));
 			}
 
-			// 再起動直後でもすぐにバインドできるようにする
 			if (setsockopt(m_listenFd, SOL_SOCKET, SO_REUSEADDR, &optionOn, sizeof(optionOn)) < 0) {
 				close(m_listenFd);
 				continue;
@@ -72,12 +57,12 @@ void IrcServer::setUpSocket() {
 
 			if (bind(m_listenFd, p->ai_addr, p->ai_addrlen) == 0) {
 				boundAddr = p;
-				break; // バインド成功が目的
+				break;
 			}
 			close(m_listenFd);
 		}
 	}
-	freeaddrinfo(res);//アドレス情報リストはマロックしてるっぽい
+	freeaddrinfo(res);
 
 	if (boundAddr == NULL)
 		throw std::runtime_error("Bind failed for both IPv4 and IPv6");
@@ -94,45 +79,108 @@ void IrcServer::setUpSocket() {
 	m_pollFds.push_back(pollFd);
 }
 
-//
 void	IrcServer::run() {
 
 	while (g_signalCaught == 0)
 	{
-		int numFds = poll(&m_pollFds[0], m_pollFds.size(), 0);
+		if (m_pollFds.empty())
+			continue;
+
+		int numFds = poll(&m_pollFds[0], m_pollFds.size(), -1);
 		if (numFds < 0) {
 			if (errno == EINTR)
-				continue;//これがないとシグナルのときpoll failed判定になる
+				continue;
 			throw std::runtime_error("Poll failed");
 		}
 
 		for (std::size_t i = m_pollFds.size(); i > 0; --i)
 		{
-			//複数のイベントが発生することもあるので、ビット演算でPOLLINが含まれるかを見てる。
-			if (m_pollFds[i - 1].revents & POLLIN) {
+			struct pollfd &pfd = m_pollFds[i - 1];
+			short revents = pfd.revents;
 
-				if (m_pollFds[i - 1].fd == m_listenFd)
-					acceptNewClient();//リスニングソケットにイベントが起きたら
+			if (revents == 0)
+				continue;
+
+			if (revents & POLLIN) {
+
+				if (pfd.fd == m_listenFd)
+					acceptNewClient();
 				else
-					receiveFromClient(m_pollFds[i - 1].fd);
-
+					receiveFromClient(pfd.fd);
 			}
-			if (m_pollFds[i - 1].revents & POLLHUP)
-				closeClient(i - 1);//接続が切れたとき
+
+			if (revents & POLLOUT) {
+
+				ClientIt it = m_clients.find(pfd.fd);
+				if (it == m_clients.end()) {
+					continue;
+				}
+
+				Client &client = it->second;
+				if (!client.hasPendingSend()) {
+					pfd.events = POLLIN;
+					continue;
+				}
+
+				std::string &buf = client.getSendBuffer();
+				std::cout << "[ Sending to fd=" << pfd.fd << " ]: " << buf;
+				ssize_t sent = send(pfd.fd, buf.c_str(), buf.size(), 0);
+
+				if (sent > 0) {
+
+					buf.erase(0, sent);
+					if (!client.hasPendingSend()) {
+						pfd.events = POLLIN;
+					}
+				}
+				else if (sent < 0) {
+
+					if (errno == EAGAIN || errno == EWOULDBLOCK) {
+						continue;
+					}
+					closeClientByFd(pfd.fd);
+					continue;
+				}
+				else {
+					closeClientByFd(pfd.fd);
+					continue;
+				}
+			}
+
+			if (revents & POLLHUP) {
+				closeClient(i - 1);
+			}
 		}
 	}
-	
 }
 
-//リスニングソケットに通信が来たら、クライアントソケットを作成して、ポールの監視と、自前のマップに追加する。
+void	IrcServer::enablePollout(int fd) {
+
+	for (std::size_t i = 0; i < m_pollFds.size(); ++i) {
+
+		if (m_pollFds[i].fd == fd) {
+
+			short events = m_pollFds[i].events;
+
+			if ((events & POLLOUT) == 0) {
+				m_pollFds[i].events = events | POLLOUT;
+			}
+			break;
+		}
+	}
+}
+
+
 void	IrcServer::acceptNewClient() {
 
-	struct sockaddr_storage	clientAddr;//socketaddr_inもsockaddr_in6も入るように。
+	struct sockaddr_storage	clientAddr;
 	socklen_t				addrLen = sizeof(clientAddr);
 	char					hostStr[NI_MAXHOST];
 	char					serviceStr[NI_MAXSERV];
 
-	//歴史的経緯で、EAGAINとEWOULDBRLOCKは、使い分けられてるが、どちらもソケットが読み書きできない状況を示す。
+	std::memset(hostStr, 0, sizeof(hostStr));
+	std::memset(serviceStr, 0, sizeof(serviceStr));
+
 	int	clientFd = accept(m_listenFd, (struct sockaddr *)&clientAddr, &addrLen);
 	if (clientFd < 0)
 	{
@@ -152,15 +200,16 @@ void	IrcServer::acceptNewClient() {
 	newPollFd.events = POLLIN;
 	m_pollFds.push_back(newPollFd);
 
-	//数値のIP文字列を取得、ホスト名（DNS）を取得したいときは、NI_NAMEREQDを指定する。
 	int status = getnameinfo((struct sockaddr *)&clientAddr, addrLen,
 	                           hostStr, sizeof(hostStr),
 	                           serviceStr, sizeof(serviceStr),
 	                           NI_NUMERICHOST | NI_NUMERICSERV);
-	if (status == 0)
+	if (status == 0) {
 		std::cout << "Accepted new connection from " << hostStr << ":" << serviceStr << " (fd=" << clientFd << ")" << std::endl;
-	else
+	} else {
+		std::strncpy(hostStr, "unknown", sizeof(hostStr) - 1);
 		std::cout << "Accepted new connection (fd=" << clientFd << ")" << std::endl;
+	}
 
 	std::pair<int, Client> p(clientFd, Client(clientFd, std::string(hostStr)));
 	m_clients.insert(p);
@@ -168,49 +217,42 @@ void	IrcServer::acceptNewClient() {
 	std::cout << "New client connected (fd=" << clientFd << ")" << std::endl;
 }
 
-/*
-m_clients.insert(std::make_pair(clientFd, Client(clientFd)));
-
-std::pair<int, Client> p(clientFd, Client(clientFd));
-m_clients.insert(p);
-
-m_clients[clientFd] = Client(clientFd);
-//引数なしコンストラクタを設定してないからだめ。insertかemplace
-*/
-
-
 void IrcServer::receiveFromClient(int fd) {
-	char buffer[512];//512ちょうどじゃなくて、512以上で確保して、それをオーバーしたらのほうがいいかも。
+	char buffer[512];
 	int bytes = recv(fd, buffer, sizeof(buffer), 0);
 
 	if (bytes <= 0) {
-		//これは、クライアントが接続を閉じたか（eof）、一時的に読み書きできない状況以外
+
 		if (bytes == 0 || (errno != EAGAIN && errno != EWOULDBLOCK))
 			closeClientByFd(fd);
 		return;
 	}
 
-	//nc で分割送信したときの確認使える。
-	//std::cout << "Received " << bytes << " bytes from client (fd=" << fd << ")" << std::endl;
-
 	ClientIt it = m_clients.find(fd);
 	if (it == m_clients.end())
 		return;
-	Client &client = it->second;
+	Client* client = &it->second;
 
-	client.appendBuffer(std::string(buffer, bytes));
+	client->appendBuffer(std::string(buffer, bytes));
 
 	std::string containCmd;
 
-	//１つのバッファーで複数のコマンドが来たときようにワイルで回し、一つのコマンドの超過に対応する。
-	while (client.extractNextCommand(containCmd))
+	// Commands may trigger closeClientByFd, so re-check the iterator each loop.
+	while (true)
 	{
+		if (!client->extractNextCommand(containCmd))
+			break;
 		if (containCmd.length() > 512) {
 			closeClientByFd(fd);
 			std::cerr << "Client (fd=" << fd << ") sent command exceeding 512 bytes. Connection closed." << std::endl;
 			return;
 		}
-		m_commandHandler.parseCommand(containCmd, client);
+		m_commandHandler.parseCommand(containCmd, *client);
+
+		it = m_clients.find(fd);
+		if (it == m_clients.end())
+			return;
+		client = &it->second;
 	}
 }
 
@@ -225,11 +267,9 @@ void	IrcServer::closeClient(std::size_t i) {
 	closeClientByFd(fd);
 }
 
-//データは、ポール、クライアント、接続済ソケットの3種類がある
-//逆順なのは、eraseのときに、整列したときにずれが起きないようにするため。
 void	IrcServer::closeClientByFd(int fd) {
 
-	removeClientFromAllChannels(fd);//すでにチャンネルに参加しているときのために。
+	removeClientFromAllChannels(fd);
 	for (std::size_t i = m_pollFds.size(); i > 0; --i) {
 
 		if (m_pollFds[i - 1].fd == fd) {
@@ -257,7 +297,7 @@ Channel& IrcServer::getCreateChannel(const std::string& name) {
 	ChannelIt it = m_channels.find(name);
 	if (it == m_channels.end()) {
 
-		std::pair<std::string, Channel> newChannel(name, Channel(name));
+		std::pair<std::string, Channel> newChannel(name, Channel(name, this));
 		it = m_channels.insert(newChannel).first;
 	}
 	return it->second;
@@ -288,16 +328,12 @@ void IrcServer::removeChannel(const std::string& name) {
 	m_channels.erase(name);
 }
 
-//登録前のユーザーにブロードキャストしないようにしてみる。
-void IrcServer::broadcastAll(const std::string& message) {
+void IrcServer::broadcastAll(const std::string& msg)
+{
 	for (ClientIt it = m_clients.begin(); it != m_clients.end(); ++it) {
-
 		if (!it->second.isAuthenticated())
 			continue;
-		std::cout << "[send bas]" << message << std::endl;
-		if (send(it->first, message.c_str(), message.length(), 0) < 0) {
-			std::cerr << "Failed to broadcast message to client (fd=" << it->first << ")" << std::endl;
-		}
+		queueMessageForClient(it->first, msg);
 	}
 }
 
@@ -305,7 +341,6 @@ void IrcServer::removeClientFromAllChannels(int fd) {
 
 	ChannelIt it = m_channels.begin();
 
-	//チャンネルからユーザーを探して、いたら、削除する。
 	while (it != m_channels.end()) {
 
 		Channel& channel = it->second;
@@ -313,7 +348,6 @@ void IrcServer::removeClientFromAllChannels(int fd) {
 
 		if (channel.hasMember(fd)) {
 
-			//追加：オペレーター権限も削除
 			channel.removeOperator(fd);
 			channel.removeMember(fd);
 			ClientIt clientIt = m_clients.find(fd);
@@ -366,6 +400,15 @@ Client*	IrcServer::findClientByNick(const std::string& nick) {
 	return NULL;
 }
 
+Client*	IrcServer::findClientByFd(int fd) {
+
+	std::map<int, Client>::iterator it = m_clients.find(fd);
+	if (it != m_clients.end()) {
+		return &it->second;
+	}
+	return NULL;
+}
+
 std::string	IrcServer::getServerName() const {
 
 	return m_serverName;
@@ -390,6 +433,14 @@ std::map<std::string, Channel>& IrcServer::getChannels() {
 
 }
 
+void IrcServer::queueMessageForClient(int fd, const std::string& msg) {
+	Client* c = findClientByFd(fd);
+	if (!c)
+		return;
+	c->appendSendBuffer(msg);
+	enablePollout(fd);
+}
+
 /*==  Constructor & destructor  ======================================*/
 
 IrcServer::IrcServer(int port, const std::string &password)
@@ -409,6 +460,37 @@ IrcServer::~IrcServer() {
 
 	std::cout << "Server resources cleaned up." << std::endl;
 }
+
+
+// void	IrcServer::run() {
+
+// 	while (g_signalCaught == 0)
+// 	{
+// 		int numFds = poll(&m_pollFds[0], m_pollFds.size(), 0);
+// 		if (numFds < 0) {
+// 			if (errno == EINTR)
+// 				continue;//これがないとシグナルのときpoll failed判定になる
+// 			throw std::runtime_error("Poll failed");
+// 		}
+
+// 		for (std::size_t i = m_pollFds.size(); i > 0; --i)
+// 		{
+// 			//POLL_INは読み込み可能、POLL_OUTは書き込み可能、POLL_HUPは接続が切れたとき。
+// 			//複数のイベントが発生することもあるので、ビット演算でPOLLINが含まれるかを見てる。
+// 			if (m_pollFds[i - 1].revents & POLLIN) {
+
+// 				if (m_pollFds[i - 1].fd == m_listenFd)
+// 					acceptNewClient();//リスニングソケットにイベントが起きたら
+// 				else
+// 					receiveFromClient(m_pollFds[i - 1].fd);
+
+// 			}
+// 			if (m_pollFds[i - 1].revents & POLLHUP)
+// 				closeClient(i - 1);//接続が切れたとき
+// 		}
+// 	}
+	
+// }
 
 /*
 void	IrcServer::setUpSocket() {

@@ -1,53 +1,6 @@
 #include "../includes/CommandHandler.hpp"
 #include "../includes/IrcServer.hpp"
-#include <sstream>
-#include <algorithm>
-#include <iostream>
-#include <cctype>
-#include <sys/socket.h> // for send
-#include <cstring>      // for std::strerror
-#include <cerrno>       // for errno
-
-/*
-【概要】
-メッセージの解析を行い、コマンドを処理するクラス
-コマンドハンドラーメソッドは、ディスパッチャーで、クラスのアウトラインをk提供する。
-
-```
-サーバーが接続可能なクライアント上限の対応
-005 RPL_BOUNCE
-サーバーに、クライアント数のゲッターを設置することになる。
-
-
-
-
-必要そうなAPI
-チャンネルの生成（）
-チャンネルの探索（）
-チャンネルの削除（）
-チャンネルのクライアント一覧（）
-チャンネルからユーザーを削除する（）
-チャンネルにユーザーがいるか（）
-チャンネルの参加者が0になった場合の削除（）
-
-
-コマンドのうち、すべてのチャンネルにブロードキャストが必要そうなの
-QUIT　→マルチチャネルなら考慮必須
-NICK　→変更はさせない。
-KILL　→オペレーター専用、そのユーザーが消えたことをブロードキャスト
-ERROR　→接続が切れたことをブロードキャストだが、どういう場合があるのか。
-
-JOIN→チャンネル参加のブロードキャスト
-PART→チャンネル離脱のブロードキャスト
-MODE→チャンネルモード変更のブロードキャスト
-TOPIC→チャンネルのトピック変更のブロードキャスト
-INVITE→招待されるもののみにでよい？
-NAMES
-LIST
-
-421 Unknown command
-
-*/
+#include <iostream>//for std::cout, std::cerr
 
 void CommandHandler::parseCommand(const std::string& line, Client& client)
 {
@@ -75,7 +28,6 @@ void CommandHandler::parseCommand(const std::string& line, Client& client)
 
 /*=====================================================*/
 
-//プロトコル側にゲッターがないので、サーバー名は固定で使う。
 CommandHandler::CommandHandler(IrcServer& server)
 	: m_server(server), m_serverName(server.getServerName())
 {

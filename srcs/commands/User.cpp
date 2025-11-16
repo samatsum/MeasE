@@ -1,14 +1,7 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include <iostream>
-#include <unistd.h>
 
-/*
-1459準拠
-
-*/
-
-//USERコマンドの処理
 void CommandHandler::handleUser(const Message& msg, Client& client)
 {
 	if (client.isRegistered()) {

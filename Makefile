@@ -12,6 +12,7 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(SRC_DIR)/Client.cpp \
        $(SRC_DIR)/Channel.cpp \
        $(SRC_DIR)/CommandHandler.cpp \
+	   $(SRC_DIR)/CommandHandlerUtils.cpp \
 	   $(SRC_DIR)/utils.cpp \
 	   $(CMD_DIR)/Bot.cpp \
 	   $(CMD_DIR)/Cap.cpp \
@@ -28,7 +29,6 @@ SRCS = $(SRC_DIR)/main.cpp \
        $(CMD_DIR)/Quit.cpp \
 	   $(CMD_DIR)/Topic.cpp \
 	   $(CMD_DIR)/User.cpp \
-	   $(CMD_DIR)/Utils.cpp \
 	   $(CMD_DIR)/Who.cpp \
 	   $(CMD_DIR)/Whois.cpp
 

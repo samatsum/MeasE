@@ -1,17 +1,6 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
-#include <sys/socket.h>
-#include <sstream>
-#include <iostream>
-#include <cstring>
-#include <cerrno>
-
-/*
-
-
-
-*/
 
 void CommandHandler::handlePart(const Message& msg, Client& client)
 {
@@ -44,16 +33,11 @@ void CommandHandler::handlePart(const Message& msg, Client& client)
 	std::string partMsg = buildMessage(client.makePrefix(), "PART", params, reason);
 
 	channel->broadcast(partMsg);
-	//sendMsg(client.getFd(), partMsg);
 
-	client.resetBotCards();
-
-	// --- チャンネルから削除 ---
-	channel->removeOperator(client.getFd());//再度入った時を考慮
+	channel->removeOperator(client.getFd());
 	client.leaveChannel(channelName);
 	channel->removeMember(client.getFd());
 
-	//最後のメンバーならチャンネル削除
 	if (channel->getMemberCount() == 0)
 		m_server.removeChannel(channelName);
 

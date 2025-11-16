@@ -1,22 +1,8 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
-#include <vector>
-#include <string>
 
-/*
 
-311 RPL_WHOISUSER ニック、ユーザー名、ホスト名、実名
-312 RPL_WHOISSERVER　接続してるサーバー情報
-318 RPL_ENDOFWHOIS　応答の終了
-401 ERR_NOSUCHNICK　いねえ
-431 ERR_NONICKNAMEGIVEN　ニックなし。
-サーバーなし。
-
-エラーは、NONICKNAMEGIVEN、NOSUCHNICK、NOSUCHSERVERのみのエラーハンドリングで行ける。
-AWAYは対応しない、オペレーターと、ワイルドカードは未実装。
-
-*/
 
 void CommandHandler::handleWhois(const Message& msg, Client& client)
 {
@@ -29,8 +15,6 @@ void CommandHandler::handleWhois(const Message& msg, Client& client)
 
 	std::string targetNick = msg.params[0];
 	Client* target = m_server.findClientByNick(targetNick);
-
-	//該当なし
 	if (!target) {
 		sendError(client, "401", targetNick, "No such nick");
 		return;
@@ -64,3 +48,17 @@ void CommandHandler::handleWhois(const Message& msg, Client& client)
 		sendMsg(client.getFd(), buildMessage("", "318", params, "End of WHOIS list"));
 	}
 }
+
+/*
+
+311 RPL_WHOISUSER ニック、ユーザー名、ホスト名、実名
+312 RPL_WHOISSERVER　接続してるサーバー情報
+318 RPL_ENDOFWHOIS　応答の終了
+401 ERR_NOSUCHNICK　いねえ
+431 ERR_NONICKNAMEGIVEN　ニックなし。
+サーバーなし。
+
+エラーは、NONICKNAMEGIVEN、NOSUCHNICK、NOSUCHSERVERのみのエラーハンドリングで行ける。
+AWAYは対応しない、オペレーターと、ワイルドカードは未実装。
+
+*/

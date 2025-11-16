@@ -1,26 +1,6 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
-#include <sys/socket.h>
-#include <sstream>
-#include <iostream>
-#include <cstdlib>
-#include <cstring>
-#include <cerrno>
-
-/*
-INVITEは存在しないチャンネルへの招待も可能。（401は、ノーサッチニック、オアチャンネルだが。）
-チャンネルの、インバイトリストが既存のものしかないから、存在しないチャンネルの設計はしたくない。
-（実在するチャンネルのインバイトリストに追加するだけのメソッドだし。）
-
-ただし、存在するチャンネルには、所属メンバーだけが可能。
-インバイトオンリーフラグが設定されてるときは、オペレーターのみ可能。
-招待の通知は、正体されたものだけが受け取る。
-
-AWAY設定はそもそもその状態の定義がないので不要。
-
-チャンネルの場所がおかしい？
-*/
 
 void CommandHandler::handleInvite(const Message& msg, Client& client)
 {
@@ -47,7 +27,6 @@ void CommandHandler::handleInvite(const Message& msg, Client& client)
 	const ChannelModes& modes = ch->getModes();
 	if (modes.inviteOnly && !ch->isOperator(client.getFd())) {
 		sendError(client, "NOTICE", targetNick, "You are not channel operator (+" + channelName + " requires op)");	
-		// sendError(client, "482", channelName, "You're not channel operator");
 		return;
 	}
 
@@ -58,7 +37,7 @@ void CommandHandler::handleInvite(const Message& msg, Client& client)
 	}
 
 	if (target->isInChannel(channelName)) {
-		// ERR_USERONCHANNEL 443 <nick> <chan> :is already on channel
+
 		std::vector<std::string> p;
 		p.push_back(client.getNickName());
 		p.push_back(targetNick);
@@ -68,7 +47,8 @@ void CommandHandler::handleInvite(const Message& msg, Client& client)
 	}
 
 	ch->addInvitedNick(targetNick);
-	//招待通知
+
+	//invite notification
 	{
 		std::vector<std::string> p;
 		p.push_back(targetNick);

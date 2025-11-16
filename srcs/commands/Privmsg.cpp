@@ -1,29 +1,6 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
-#include <sys/socket.h>
-#include <sstream>
-#include <iostream>
-#include <cstring>
-#include <cerrno>
-
-/*
-Error　Reply（2812）
-401 ERR_NOSUCHNICK - ニックネームなし
-402　→マルチサーバなので関係なし
-403　ERR_NOSUCHCHANNEL - チャンネルなし
-404　ERR_CANNOTSENDTOCHAN - チャンネルに送信できない
-405　一度に多くのチャンネルに送信しようとした場合（2つ以上を禁止するべきか、テキスト再確認
-
-2812系のPRIVMSGエラー一覧
-411 ERR_NORECIPIENT - 宛先なし
-412 ERR_NOTEXTTOSEND - 送信テキストなし
-413　ERR_NOTOPLEVEL -?
-414　ERR_WILDTOPLEVEL -?
-415 ERR_BADMASK -?
-413から415系はマスクの不正利用、よお知らん。
-
-*/
 
 void CommandHandler::handlePrivmsg(const Message& msg, Client& client)
 {
@@ -73,7 +50,7 @@ void CommandHandler::handlePrivmsg(const Message& msg, Client& client)
 		return;
 	}
 
-	//ユーザー宛て
+	//for user
 	std::map<int, Client>& clients = m_server.getClients();
 	for (std::map<int, Client>::iterator it = clients.begin(); it != clients.end(); ++it)
 	{
@@ -84,9 +61,7 @@ void CommandHandler::handlePrivmsg(const Message& msg, Client& client)
 			params.push_back(target);
 			std::string out = buildMessage(prefix, "PRIVMSG", params, message);
 
-			if (send(it->first, out.c_str(), out.size(), 0) == -1)
-				std::cerr << "Send PRIVMSG failed: " << std::strerror(errno) << std::endl;
-
+			m_server.queueMessageForClient(it->first, out);
 			std::cout << "[fd " << client.getFd() << "] -> [fd " << it->first << "] PRIVMSG: " << message << std::endl;
 			return;
 		}
@@ -95,3 +70,21 @@ void CommandHandler::handlePrivmsg(const Message& msg, Client& client)
 	sendError(client, "401", target, "No such nick/channel");
 	std::cout << "[fd " << client.getFd() << "] PRIVMSG target not found: " << target << std::endl;
 }
+
+/*
+Error　Reply（2812）
+401 ERR_NOSUCHNICK - ニックネームなし
+402　→マルチサーバなので関係なし
+403　ERR_NOSUCHCHANNEL - チャンネルなし
+404　ERR_CANNOTSENDTOCHAN - チャンネルに送信できない
+405　一度に多くのチャンネルに送信しようとした場合（2つ以上を禁止するべきか、テキスト再確認
+
+2812系のPRIVMSGエラー一覧
+411 ERR_NORECIPIENT - 宛先なし
+412 ERR_NOTEXTTOSEND - 送信テキストなし
+413　ERR_NOTOPLEVEL -?
+414　ERR_WILDTOPLEVEL -?
+415 ERR_BADMASK -?
+413から415系はマスクの不正利用、よお知らん。
+
+*/

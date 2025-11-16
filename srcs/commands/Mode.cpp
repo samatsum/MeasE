@@ -3,52 +3,8 @@
 #include "../../includes/Channel.hpp"
 #include "../../includes/Utils.hpp"
 #include <sstream>
-#include <iostream>
-#include <cstdlib>
 #include <cerrno>
-
-/*
-324の返答が、ちとあとでチェック
-リミット処理の異常はチャンネル内部で知ることができない？
-
-・つかいかた
-MODE #channel [+|-]modes [params]
-modes:
-i - invite only
-t - topic protected
-k - key (password)
-o - operator
-l - user limit
-
-kiはおｋぽい。
-
-フラグとか考えないで、
-bが、あったら、最初に処理して、paramsから抜く、これで行く。
-
-
-irssiで
-/mode +iをやると
-MODE #gen +i
-として送ってくれる
-サーバーが、482を返す挙動が確認できる。
-しかし、irssiではチャンネルウィンドウから追い出されて
-サーバーではメンバーだが、クライアント側ではメンバーでない状態になる。
-ただ、チャンネルメッセージは見ることができる。
-
-権限がないのに、モード変更を試みると+tでも
-追い出された。
-
-多分だが、482の返答では、クライアント上で追放してくる。
-サーバーでは追放しないで、クライアントでは追放されてしまい整合しない。
-そのため。
-NOTICE（返信や自動応答を期待しない情報通知）で返すように変更。
-サーバーの返答が悪いのかもしれないが、NOTICEで対応。
-
-RFC1459では、チャンネルモードはオペレーター用になる（しかし、bはどうなんだと。）
-しかも適切に返答しないと、mode bを連投してくる。尋ねるのはええんか。
-
-
-*/
+#include <cstdlib>
 
 void CommandHandler::handleMode(const Message& msg, Client& client) {
 	if (!requireAuth(client, "MODE"))
@@ -67,13 +23,11 @@ void CommandHandler::handleMode(const Message& msg, Client& client) {
 	handleChannelMode(msg, client);
 }
 
-// --- ユーザーモードは非対応 ---
 void CommandHandler::handleUserMode(const Message& msg, Client& client) {
 	(void)msg;
 	sendError(client, "501", "MODE", "User modes are not supported on this server");
 }
 
-// --- チャンネルモード ---
 void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 	const std::string& target = msg.params[0];
 	Channel* channel = m_server.findChannel(target);
@@ -87,11 +41,6 @@ void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 		return;
 	}
 
-	// --- モード確認のみ ---
-	// if (msg.params.size() == 1) {
-	// 	replyChannelModes(client, *channel, target);
-	// 	return;
-	// }
 	if (msg.params.size() == 1 || (msg.params.size() >= 2 && msg.params[1].empty())) {
 		replyChannelModes(client, *channel, target);
 		return;
@@ -100,7 +49,6 @@ void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 	if (msg.params[1].find('b') != std::string::npos) {
 		handleBan(client, *channel, target);
 
-		//+b, -b, bの場合はここで終わらせる
 		bool onlyB = true;
 		for (size_t i = 0; i < msg.params[1].size(); ++i) {
 			char c = msg.params[1][i];
@@ -125,28 +73,14 @@ void CommandHandler::handleChannelMode(const Message& msg, Client& client) {
 	newMsg.params[1] = cleaned;
 
 	if (!channel->isOperator(client.getFd())) {
-		//sendError(client, "482", target, "You're not channel operator");
-		//NOTICE <user> :You are not channel operator (+i requires op)を返す。
-		//482をやめる。
+
 		sendError(client, "NOTICE", target, "You are not channel operator (+" + cleaned + " requires op)");		
 		return;
 	}
-	// --- 権限チェック ---　これは複数のコマンドが入らない。
-	// if (!(msg.params.size() >= 2)) {
-	// 	if (!channel->isOperator(client.getFd())) {
-	// 		sendError(client, "482", target, "You're not channel operator");
-	// 		return;
-	// 	}
-	// }
-	// if (!channel->isOperator(client.getFd())) {
-	// 	sendError(client, "482", target, "You're not channel operator");
-	// 	return;
-	// }
 
 	applyChannelMode(newMsg, client, *channel);
 }
 
-// --- チャンネルモード一覧返信 (324) ---
 void CommandHandler::replyChannelModes(Client& client, Channel& channel, const std::string& target) {
 	const ChannelModes& modes = channel.getModes();
 	std::ostringstream modeLine;
@@ -160,7 +94,6 @@ void CommandHandler::replyChannelModes(Client& client, Channel& channel, const s
 	sendChanReply(client.getFd(), "324", client.getNickName(), target, modeLine.str());
 }
 
-// --- モード適用処理 ---
 void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channel& channel) {
 	std::string modeFlags = msg.params[1];
 	bool adding = true;
@@ -205,7 +138,6 @@ void CommandHandler::applyChannelMode(const Message& msg, Client& client, Channe
 	broadcastModeChange(client, channel, msg);
 }
 
-// --- +k (key) 処理 ---
 void CommandHandler::handleModeKey(const Message& msg, Client& client, Channel& channel,
                                    ChannelModes& modes, bool adding, size_t& paramIndex) {
 	(void)channel;
@@ -225,7 +157,6 @@ void CommandHandler::handleModeKey(const Message& msg, Client& client, Channel& 
 	}
 }
 
-// --- +o (operator) 処理 ---
 void CommandHandler::handleModeOp(const Message& msg, Client& client, Channel& channel,
                                   bool adding, size_t& paramIndex) {
 	if (paramIndex >= msg.params.size()) {
@@ -252,7 +183,6 @@ void CommandHandler::handleModeOp(const Message& msg, Client& client, Channel& c
 		sendError(client, "441", nick, "They aren't on that channel");
 }
 
-// --- +l (limit) 処理 ---
 void CommandHandler::handleModeLimit(const Message& msg, Client& client,
                                      Channel& channel, ChannelModes& modes,
                                      bool adding, size_t& paramIndex)
@@ -269,18 +199,14 @@ void CommandHandler::handleModeLimit(const Message& msg, Client& client,
 		char* endptr;
 		errno = 0;
 		int limit = std::strtol(msg.params[paramIndex++].c_str(), &endptr, 10);
-		if (errno != 0 || *endptr != '\0' || limit < 0 || limit > 1000) {
+		if (errno != 0 || *endptr != '\0' || limit <= 0 || limit > 1000) {
 			sendError(client, "461", "MODE", "Invalid limit parameter");
 			return;
 		}
-		// if (limit == 0 && msg.params[paramIndex - 1] != "0") {
-		// 	sendError(client, "461", "MODE", "Invalid limit parameter");
-		// 	return;
-		// }
 
 		modes.userLimit = limit;
 	} else {
-		modes.userLimit = 1000; // デフォルト
+		modes.userLimit = 1000;
 	}
 }
 
@@ -291,7 +217,6 @@ void CommandHandler::handleBan(Client& client, Channel& channel, const std::stri
     sendChanReply(client.getFd(), "368", client.getNickName(), chanName, "End of channel ban list");
 }
 
-// --- モード変更通知 ---
 void CommandHandler::broadcastModeChange(Client& client, Channel& channel, const Message& msg) {
 	std::string prefix = client.makePrefix();
 	std::string out = buildMessage(prefix, "MODE", msg.params, "");

@@ -1,14 +1,6 @@
 #include "../../includes/CommandHandler.hpp"
-#include <sys/socket.h>//これいらんやろ。
-#include <cerrno>
-#include <cstring>
-#include <iostream>
 
-/*
-Error Reply
-409 ERR_NOORIGIN- 発信元パラメータがない PING または PONG メッセージ。(2812)
 
-*/
 
 void CommandHandler::handlePing(const Message& msg, Client& client)
 {
@@ -31,3 +23,9 @@ void CommandHandler::handlePing(const Message& msg, Client& client)
 
 	std::cout << "[fd " << client.getFd() << "] PONG sent: " << token << std::endl;
 }
+
+/*
+Error Reply
+409 ERR_NOORIGIN- 発信元パラメータがない PING または PONG メッセージ。(2812)
+
+*/

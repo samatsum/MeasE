@@ -3,12 +3,6 @@
 #include "../../includes/Client.hpp"
 #include "../../includes/Channel.hpp"
 #include <sstream>
-#include <iostream>
-
-/*
-なんでこのコマンドを実装したのか、よく覚えてない。
-
-*/
 
 typedef std::map<std::string, Channel>::iterator ChannelIt;
 
@@ -21,7 +15,6 @@ void CommandHandler::handleNames(const Message& msg, Client& client)
 	if (!msg.params.empty())
 		target = msg.params[0];
 
-	//チャンネル指定なし:すべてのチャンネルを返す 
 	if (target.empty())
 	{
 		std::map<std::string, Channel>& channels = m_server.getChannels();

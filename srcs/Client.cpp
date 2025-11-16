@@ -1,21 +1,9 @@
 #include "../includes/Client.hpp"
-#include <unistd.h>
-#include <cstdlib>
-/*
-【概要】
-クライアントごとの情報を管理するクラス。
 
-ホストネームは固定値にしておく。
-
-そのため、リナックス側での対応を考慮する必要がある。
-*/
-
-//リナックス環境では、LFだけで改行される？netcatだとどうか？これを考慮して実装を考える。
 bool Client::extractNextCommand(std::string &containCmd) {
 
 	std::size_t pos = m_buffer.find("\r\n");
 
-	//改行がないと、nposは-1になる。つまりまだ改行がなかったね。//ここでリナックスだとこの処理が必要になるんじゃないかで入れてる。
 	if (pos == std::string::npos){
 
 		pos = m_buffer.find('\n');
@@ -25,10 +13,8 @@ bool Client::extractNextCommand(std::string &containCmd) {
 		m_buffer.erase(0, pos + 1);
 		return true;
 	}
-	// 改行までの文字を切り抜いて
 	containCmd = m_buffer.substr(0, pos);
 
-	// 抽出した分を削除（CRLF 2文字分を含めて）
 	m_buffer.erase(0, pos + 2);
 
 	return true;
@@ -156,63 +142,24 @@ bool Client::isInChannel(const std::string& name) const {
 /*============================================*/
 
 std::string Client::makePrefix() const {
-	return m_nickName + "!" + m_userName + "@" + m_host; // m_host を持っている前提
+	return m_nickName + "!" + m_userName + "@" + m_host;
 }
 
 /*=========================================================*/
 
-void Client::addBotCard(const std::string& card) {
-
-	m_botCards.push_back(card);
+void Client::appendSendBuffer(const std::string &msg) {
+	m_sendBuffer += msg;
 }
 
-void Client::resetBotCards() {
-
-	m_botCards.clear();
+bool Client::hasPendingSend() const {
+	return m_sendBuffer.size() > 0;
 }
 
-int Client::calcBotBJTotal() const
-{
-    int total = 0;
-    int aceCount = 0;
-
-    for (size_t i = 0; i < m_botCards.size(); i++)
-    {
-        const std::string& card = m_botCards[i];
-
-        if (card == "J" || card == "Q" || card == "K")
-        {
-            total += 10;
-        }
-        else if (card == "0") // Ace
-        {
-            total += 1;
-            aceCount++;
-        }
-        else
-        {
-            total += std::atoi(card.c_str());
-        }
-    }
-
-	//aは、1か11で扱い、有利な方を適用
-    for (int i = 0; i < aceCount; i++)
-    {
-        if (total + 10 <= 21)
-            total += 10;
-    }
-
-    return total;
+std::string &Client::getSendBuffer() {
+	return m_sendBuffer;
 }
 
-size_t Client::getBotCardCount() const {
-
-	return m_botCards.size();
-}
-
-/*=== コンストラクタ、デストラクタ ============================*/
-
-//Client::Client(int fd) : m_fd(fd), m_host("localhost"), m_isAuthenticated(false), m_isRegistered(false) {}
+/*=== constructor、destructor ============================*/
 
 Client::Client(int fd, const std::string& host)
     : m_fd(fd), m_host(host), m_isAuthenticated(false), m_isRegistered(false) {}

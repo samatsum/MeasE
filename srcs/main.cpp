@@ -2,19 +2,10 @@
 #include <cerrno>  //for errno
 #include <iostream> //for std::cout, std::cerr
 #include <csignal> //for sigaction, sigemptyset, sigaddset, sigprocmask
-#include <cstring> 
+#include <cstring> // for std::memset
 #include <stdexcept> //for std::runtime_error
-#include <unistd.h> //for write
 #include "../includes/IrcServer.hpp"
 #include "../includes/Utils.hpp"
-
-/*
-port番号は、1023までは特権ポート、49152以上はクライアント側で使うダイナミックポート。
-
-ポートはshortが多いが、符号付き整数値だから、負の値に化ける危険性あり。-32,768から32,767
-htonsは使わないように
-
-*/
 
 volatile sig_atomic_t g_signalCaught = 0;
 
@@ -84,8 +75,6 @@ static bool checkArgs(int argc, char **argv, int &port, std::string &passWord)
 static void sigHandler(int signo)
 {
     g_signalCaught = signo;
-	// const char msg[] = "\nSignal detected, Starting server shutdown...\n";
-	// write(STDOUT_FILENO, msg, sizeof(msg) - 1);
 }
 
 static void SetUpSignalHandlers(struct sigaction &sa)

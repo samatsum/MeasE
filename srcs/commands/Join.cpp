@@ -1,36 +1,7 @@
 #include "../../includes/CommandHandler.hpp"
 #include "../../includes/IrcServer.hpp"
 #include "../../includes/Channel.hpp"
-#include <sys/socket.h>
 #include <sstream>
-#include <iostream>
-#include <cstring>
-#include <cerrno>
-
-/*
-チャンネル名の妥当性ルール
-rfc2812
-443 ERR_USERONCHANNEL
-451	ERR_NOTREGISTERED
-471 ERR_CHANNELISFULL
-476 ERR_BADCHANMASK
-461 ERR_NEEDMOREPARAMS
-
-332　RPL_TOPIC　"<channel> :<topic>"
-
-353　RPL_NAMREPLY
-366　RPL_ENDOFNAMES　"<channel> :End of /NAMES list"
-
-インバイトモード、ユーザーリミットモードの実装が必要。
-
-//チャンネル名は大文字、小文字を区別しない。
-チャンネル作成者が、オペレーターになるが、そいつが抜けた場合はどうする？(RFC1459)
-一応、
-
-インバイトモードでも、招待されてないユーザーがすでにインバイトモードに指定されたチャンネルを
-開こうとするとチャンネル画面は開けるが、メッセージの送受信はできない。
-
-*/
 
 static bool checkValidChannelName(const std::string &name);
 
@@ -60,7 +31,7 @@ void CommandHandler::handleJoin(const Message& msg, Client& client)
 			sendError(client, "473", channelName, "Cannot join channel (+i)");
 			return;
 		}
-		channelPtr->removeInvitedNick(client.getNickName());//ここで消すかは議論があるとかないとか。
+		channelPtr->removeInvitedNick(client.getNickName());
 	}
 
 	Channel& channel = *channelPtr;
@@ -93,7 +64,7 @@ void CommandHandler::handleJoin(const Message& msg, Client& client)
 	if (channel.getMemberCount() == 1)
 		channel.addOperator(client.getFd());
 
-	//JOIN通知
+	//JOIN notice
 	{
 		std::vector<std::string> params;
 		params.push_back(channelName);
@@ -142,7 +113,6 @@ void CommandHandler::handleJoin(const Message& msg, Client& client)
 	}
 }
 
-//&は、ローカルなので、使わん　紛らわしいから弾いても良いか
 static bool checkValidChannelName(const std::string &name) {
 
 	if (name.empty() || name.size() > 50)
@@ -165,3 +135,18 @@ static bool checkValidChannelName(const std::string &name) {
 	}
 	return true;
 }
+
+/*
+rfc2812
+443 ERR_USERONCHANNEL
+451	ERR_NOTREGISTERED
+471 ERR_CHANNELISFULL
+476 ERR_BADCHANMASK
+461 ERR_NEEDMOREPARAMS
+
+332　RPL_TOPIC　"<channel> :<topic>"
+
+353　RPL_NAMREPLY
+366　RPL_ENDOFNAMES　"<channel> :End of /NAMES list"
+
+*/

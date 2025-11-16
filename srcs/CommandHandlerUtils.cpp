@@ -1,20 +1,9 @@
-#include "../../includes/CommandHandler.hpp"
-#include "../../includes/IrcServer.hpp"
-#include <iostream>
-#include <unistd.h>
-#include <sstream>
-#include <cstring>
-#include <cerrno>
+#include "../includes/CommandHandler.hpp"
+#include "../includes/IrcServer.hpp"
+#include <iostream>//for std::cout, std::cerr
+#include <sstream>//for std::istringstream, std::ostringstream
 
-/*
-【概要】
-コマンドハンドラークラスのうち、プロトコルに従った、解析と送信を行うメソッド群。
-登録完了ように、001, 002, 003, 004を返す。RFC2812参照。
-001　RPL_WELCOME　クライアントに対する最初の挨拶メッセージ
-002　RPL_YOURHOST　サーバのホスト名とバージョン情報
-003　RPL_CREATED　サーバが作成された日時情報
-004　RPL_MYINFO　サーバ情報（モードや対応機能など）
-*/
+
 
 CommandHandler::Message CommandHandler::parse(const std::string& rawLine) {
 
@@ -77,16 +66,14 @@ CommandHandler::Message CommandHandler::parse(const std::string& rawLine) {
 	return msg;
 }
 
-//あちこちで使うので、シンプルな呼び出しに。
 bool CommandHandler::requireAuth(Client& client, const std::string& command)
 {
-	if (client.isAuthenticated())
+	if (client.isRegistered())
 		return true;
 	sendError(client, "451", command, "You have not registered");
 	return false;
 }
 
-//これもよく使うやつ。
 Channel* CommandHandler::findValidChannel(const std::string& name, Client& client)
 {
 	Channel* ch = m_server.findChannel(name);
@@ -101,23 +88,6 @@ Channel* CommandHandler::findValidChannel(const std::string& name, Client& clien
 	return ch;
 }
 
-/*
-コマンド生成メソッド、プレフィックスをサーバーとクライアントで共通できる。
-prefixを指定すれば、　nickname!username@host（呼び出しで作る。）
-指定しなければ、サーバーネームをprefixにする。
-
-つまり
-:nickname!username@host COMMAND param1 param2 :trailing message\r\n
-たとえば、JOIN（コマンド通知）ならば
-:nickname!username@host JOIN #channel\r\n
-
-もしくは
-:hostname COMMAND param1 param2 :trailing message\r\n
-たとえば、サーバー返答（ニューメリック）ならば
-:nickname!username@host 001 nickname :Welcome to the ft_IRC server nickname\r\n
-
-のように生成する。
-*/
 std::string CommandHandler::buildMessage(
 	const std::string& prefix,
 	const std::string& command,
@@ -141,16 +111,6 @@ std::string CommandHandler::buildMessage(
 	return oss.str() + "\r\n";
 }
 
-
-
-
-/*
-エラー通知は、ユーザー名、コードのニューメリックタイプ
-ただ、ユーザー名取得前は、*を使う。
-:server <number> <nick> <あればcontext>　:message
-の形式。
-サーバー名は、空で用いて、sendMsg内で補完する。
-*/
 void CommandHandler::sendError(Client& client, const std::string& code,
                                const std::string& context, const std::string& text)
 {
@@ -168,25 +128,22 @@ void CommandHandler::sendError(Client& client, const std::string& code,
 	sendMsg(client.getFd(), "", code, params, text);
 }
 
-/*
-組み立て済みの場合
-*/
 void CommandHandler::sendMsg(int fd, const std::string& msg)
 {
-	std::cout << "[send]" << msg << std::endl;
-	if (send(fd, msg.c_str(), msg.size(), 0) == -1)
-		std::cerr << "Send failed: " << std::strerror(errno) << std::endl;
+	Client* c = m_server.findClientByFd(fd);
+	if (!c)
+		return;
+
+	c->appendSendBuffer(msg);
+	m_server.enablePollout(fd);
 }
 
-/*
-コマンド通知、ニューメリック返信にも使えるバージョン
-ニューメリックなら、prefixを空にしておけば、サーバー名が
-コマンド通知ならば、クライアントのプレフィックスでクライアントに指定する。
-*/
-void CommandHandler::sendMsg(int fd, const std::string& prefix,
-							const std::string& command,
-							const std::vector<std::string>& params,
-							const std::string& trailing) {
+void CommandHandler::sendMsg(int fd,
+	const std::string& prefix,
+	const std::string& command,
+	const std::vector<std::string>& params,
+	const std::string& trailing)
+{
 	std::ostringstream oss;
 
 	oss << ":";
@@ -194,26 +151,25 @@ void CommandHandler::sendMsg(int fd, const std::string& prefix,
 		oss << prefix;
 	else
 		oss << m_serverName;
+
 	oss << " " << command;
 
 	for (std::size_t i = 0; i < params.size(); ++i)
 		oss << " " << params[i];
+
 	if (!trailing.empty())
 		oss << " :" << trailing;
+
 	std::string out = oss.str() + "\r\n";
-	std::cout  << "[send]" << out << std::endl;
-	if (send(fd, out.c_str(), out.size(), 0) == -1) {
-		std::cerr << "Send message failed: " << std::strerror(errno) << std::endl;
-	}
+
+	Client* c = m_server.findClientByFd(fd);
+	if (!c)
+		return;
+
+	c->appendSendBuffer(out);
+	m_server.enablePollout(fd);
 }
 
-/*
-サーバー返答（ニューメリック）のうち、チャンネル関連のニューメリック返信用。
-:server numeric　nick #channel :<trailing> の形式にするための。
-以前だと、チャンネルがトレーリングにされてしまったので
-paramにnick, chanを入れる用。
-呼び出し元でベクター作る面倒を省くためのヘルパー。
-*/
 void CommandHandler::sendChanReply(int fd, const std::string& code,
 	const std::string& nick, const std::string& chan, const std::string& text)
 {
@@ -267,12 +223,11 @@ std::string CommandHandler::makeUppercase(const std::string& argStr)
 }
 
 /*
-// void CommandHandler::sendMsg(int fd, const std::string& code,
-// 							const std::string& target,
-// 							const std::string& text) {
-// 	std::vector<std::string> params;
-// 	if (!text.empty())
-// 		params.push_back(target);
-// 	sendMsg(fd, "", code, params, text);
-// }
+【概要】
+コマンドハンドラークラスのうち、プロトコルに従った、解析と送信を行うメソッド群。
+登録完了ように、001, 002, 003, 004を返す。RFC2812参照。
+001　RPL_WELCOME　クライアントに対する最初の挨拶メッセージ
+002　RPL_YOURHOST　サーバのホスト名とバージョン情報
+003　RPL_CREATED　サーバが作成された日時情報
+004　RPL_MYINFO　サーバ情報（モードや対応機能など）
 */
