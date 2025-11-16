@@ -32,14 +32,15 @@ void CommandHandler::handleTopic(const Message& msg, Client& client)
 			sendChanReply(client.getFd(), "332", client.getNickName(), channelName, channel->getTopic());
 
 		if (channel->getTopicSetTime() != 0) {
-			std::ostringstream whoTime;
-			whoTime << channelName << " "
-			        << channel->getTopicSetBy() << " "
-			        << channel->getTopicSetTime();
-
 			std::vector<std::string> params;
 			params.push_back(client.getNickName());
-			sendMsg(client.getFd(), buildMessage("", "333", params, whoTime.str()));
+			params.push_back(channelName);
+			params.push_back(channel->getTopicSetBy());
+
+			std::ostringstream setTime;
+			setTime << channel->getTopicSetTime();
+
+			sendMsg(client.getFd(), "", "333", params, setTime.str());
 		}
 		return;
 	}

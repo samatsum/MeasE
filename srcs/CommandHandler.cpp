@@ -7,7 +7,12 @@ void CommandHandler::parseCommand(const std::string& line, Client& client)
 	Message msg = parse(line);
 	if (!msg.isValid) {
 
-		sendError(client, "421", client.getNickName(), "Invalid command: " + msg.errorDetail);
+		std::string context;
+		if (msg.command.empty())
+			context = line;
+		else
+			context = msg.command;
+		sendError(client, "421", context, "Invalid command: " + msg.errorDetail);
 		std::cerr << "[fd " << client.getFd() << "] Invalid IRC line: " << msg.errorDetail << std::endl;
 		return;
 	}
@@ -21,7 +26,7 @@ void CommandHandler::parseCommand(const std::string& line, Client& client)
 		(this->*it->second)(msg, client);
 	} else {
 
-		sendError(client, "421", client.getNickName(), cmd + " :Unknown command");
+		sendError(client, "421", cmd, "Unknown command");
 		std::cout << "[fd " << client.getFd() << "] Unknown command: " << cmd << std::endl;
 	}
 }
